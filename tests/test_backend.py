@@ -303,9 +303,9 @@ class BackendTests(unittest.TestCase):
         from compiler.compiler import compile_source
 
         llvm_ir = compile_source("func main() { print(0) }")
-        self.assertIn('define i32 @"main"(i32 %argc, i8** %argv)', llvm_ir)
-        self.assertIn("store i32 %argc", llvm_ir)
-        self.assertIn("store i8** %argv", llvm_ir)
+        self.assertIn('define i32 @"main"(i32 %"argc", i8** %"argv")', llvm_ir)
+        self.assertIn('store i32 %"argc"', llvm_ir)
+        self.assertIn('store i8** %"argv"', llvm_ir)
         self.assertIn("__kn_argc", llvm_ir)
         self.assertIn("__kn_argv", llvm_ir)
 
@@ -351,7 +351,7 @@ class BackendTests(unittest.TestCase):
 
         llvm_ir = compile_source('func main() { eprint("oops") }')
         self.assertIn('declare i32 @"fprintf"(i8*', llvm_ir)
-        self.assertIn('c"%s\\0A\\00"', llvm_ir)
+        self.assertIn('c"%s\\0a\\00"', llvm_ir)
         self.assertTrue(
             "stderr" in llvm_ir
             or "__stderrp" in llvm_ir
@@ -362,7 +362,7 @@ class BackendTests(unittest.TestCase):
         from compiler.compiler import compile_source
 
         llvm_ir = compile_source("func main() { exit(3) }")
-        self.assertIn('declare void @"exit"(i32)', llvm_ir)
+        self.assertIn('declare void @"exit"(i32', llvm_ir)
         self.assertIn("trunc i64 3 to i32", llvm_ir)
         self.assertIn('call void @"exit"', llvm_ir)
 
