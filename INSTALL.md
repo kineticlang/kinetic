@@ -1,6 +1,6 @@
 # Installing and running Kinetic
 
-These instructions describe Kinetic 1.3.0. The version is declared in
+These instructions describe Kinetic 1.4.0. The version is declared in
 [package configuration](pyproject.toml).
 
 ## Requirements
@@ -55,7 +55,12 @@ kinetic run examples/01_hello.kn
 The editable installation reads its runtime dependency from the same
 [requirements.txt](requirements.txt), so the two installation paths share one
 dependency list. Paths to input programs are relative to your current working
-directory.
+directory. The run command forwards arguments after the source path to the
+program, where the `arg_count` and `arg` builtins can read them:
+
+```shell
+python kinetic.py run examples/12_host_io.kn alpha beta
+```
 
 ## Build output
 
@@ -70,7 +75,7 @@ that warning is not a build failure.
 Common generated outputs are covered by [.gitignore](.gitignore). Remove artifacts
 after manual verification, especially binaries from newly added examples.
 
-The [example catalog](examples/README.md) includes eleven valid numbered programs,
+The [example catalog](examples/README.md) includes twelve valid numbered programs,
 compile-time failures, runtime bounds failures, and warning demonstrations. The bootstrap status and byte
 examples use the existing language; the proposed host services are not installed
 by these setup commands.
@@ -82,9 +87,11 @@ process exit and is not reclaimed; failed nonempty-array allocations trap before
 initialization. These fixes use the existing C runtime and add no dependency to
 the installation steps.
 
-An invalid runtime index or failed nonempty-array allocation traps and returns
+An invalid runtime index, a failed nonempty-array allocation, an unreadable
+input file, or an out-of-range program argument traps and returns
 failure from the run command; the exact native exit status or signal is
-platform-dependent. The runtime-failure examples demonstrate bounds failures
+platform-dependent. The runtime-failure examples demonstrate bounds and
+host-I/O failures
 and must not be included in a success-only build-and-run loop.
 
 ## Static checks without a compiler toolchain

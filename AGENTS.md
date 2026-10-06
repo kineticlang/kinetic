@@ -1,6 +1,6 @@
 # Agent guidance
 
-Kinetic is a 1.3.0 prototype language compiler written in Python. It emits textual
+Kinetic is a 1.4.0 prototype language compiler written in Python. It emits textual
 LLVM IR through llvmlite and invokes Clang for native binaries. Keep changes small
 and do not imply that the prototype provides a production memory-safety model.
 
@@ -75,6 +75,7 @@ python kinetic.py run examples/08_array_lengths.kn
 python kinetic.py run examples/09_array_lifetimes.kn
 python kinetic.py run examples/10_text.kn
 python kinetic.py run examples/11_indexed_writes.kn
+python kinetic.py run examples/12_host_io.kn
 ```
 
 **If the user asks not to compile or run programs, do not invoke these commands,
@@ -85,6 +86,21 @@ Native build and run operations write IR and binaries next to the source.
 [.gitignore](.gitignore) covers common outputs and Python/package caches, but
 remove artifacts after manual verification. A Clang warning about overriding the
 module target triple is benign on its own.
+
+## Documentation and CI discipline
+
+Always update every Markdown file affected by a change in the same change: the
+root README, INSTALL, CONTRIBUTING, ROADMAP, this file and the other agent
+guidance files, the docs guides, and each directory README. Version references,
+feature lists, example catalogs, and command samples must describe the current
+state — no document may be left behind describing the previous one.
+
+Static and frontend checks do not cover code generation or runtime behavior.
+Hosted GitHub CI is the evidence gate for those: the behavioral job installs
+llvmlite and runs the frontend and backend suites, and the native job installs
+llvmlite, uses Clang, and builds and runs the full example suite with native
+testing enabled. Treat passing hosted behavioral and native jobs as the
+verification record for IR and runtime changes.
 
 ## Architecture
 
@@ -104,7 +120,11 @@ function, and accepts exactly one integer or string. New builtins need matching
 handling in both stages.
 
 The length builtin accepts exactly one integer array or string, and the
-slice builtin takes a string with start and end indexes. Strings are immutable
+slice builtin takes a string with start and end indexes. The 1.4.0 host-I/O
+builtins — `read_file`, `write_file`, `arg_count`, `arg`, `eprint`, and
+`exit` — are likewise special-cased in both stages and lower to C library
+calls; generated `main` functions capture `argc`/`argv` into internal
+globals, `arg` reads are bounds-guarded, and file failures trap. Strings are immutable
 byte sequences: indexing reads one byte, `==`/`<`/`>` compare bytewise, and
 `+` concatenates; these lower to C's `strlen`, `strcmp`, `memcpy`, and `malloc`.
 Arrays lower to
@@ -123,9 +143,10 @@ the bounds check. The CLI propagates failed child exit statuses. Test
 [runtime failures](examples/runtime_errors/README.md)
 separately from success examples when native execution is permitted.
 
-The [syntax guide](docs/syntax_guide.md) documents the 1.3.0 language. The
-eleven numbered [examples](examples/README.md) cover inference, control flow,
-mutation, array lengths/lifetimes, indexed writes, and text operations. Comparisons remain limited to
+The [syntax guide](docs/syntax_guide.md) documents the 1.4.0 language. The
+twelve numbered [examples](examples/README.md) cover inference, control flow,
+mutation, array lengths/lifetimes, indexed writes, text operations, and host
+I/O. Comparisons remain limited to
 equality, less-than, and greater-than.
 
 Declarations use [`func`](compiler/lexer.py:33) for functions,

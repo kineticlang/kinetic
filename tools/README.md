@@ -33,9 +33,10 @@ It returns a nonzero status on failure and does not install dependencies.
 - Native tests require explicit opt-in plus Clang and llvmlite. They build and
   execute programs in temporary directories.
 
-The 1.3.0 suites include array-length inference, descriptor propagation,
+The 1.4.0 suites include array-length inference, descriptor propagation,
 indexed writes, emitted
-bounds guards, heap-backed element storage, and returned arrays surviving later
+bounds guards, heap-backed element storage, host-I/O builtins, and returned
+arrays surviving later
 calls, as well as unsuccessful native exits for invalid indexes. The
 [runtime-failure examples](../examples/runtime_errors/README.md) are tested
 separately from successful numbered examples. They must not be run during

@@ -1,0 +1,7 @@
+// This program passes frontend analysis but traps when the executable runs.
+// Without program arguments there is no argument at index 0.
+
+func main() {
+    print(arg(0))
+    print("Unreachable")
+}

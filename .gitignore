@@ -18,6 +18,9 @@ dist/
 *.ilk
 kinetic_app
 
+# Scratch file produced by the host-I/O example
+12_host_io_scratch.txt
+
 # Extensionless binaries produced on Unix-like systems
 /examples/01_hello
 /examples/02_logic
@@ -30,7 +33,10 @@ kinetic_app
 /examples/09_array_lifetimes
 /examples/10_text
 /examples/11_indexed_writes
+/examples/12_host_io
 /examples/warnings/unused_variable
 /examples/warnings/shadowing
 /examples/runtime_errors/out_of_bounds
 /examples/runtime_errors/negative_index
+/examples/runtime_errors/arg_out_of_range
+/examples/runtime_errors/read_missing_file

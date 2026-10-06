@@ -50,6 +50,11 @@ def main() -> int:
 
     run_parser = subparsers.add_parser("run", help="Compile and immediately run a .kn file")
     run_parser.add_argument("source", type=Path, help="The Kinetic source file to run")
+    run_parser.add_argument(
+        "program_args",
+        nargs=argparse.REMAINDER,
+        help="arguments passed to the compiled program; use '--' before leading dashes",
+    )
 
     args = parser.parse_args()
 
@@ -58,7 +63,10 @@ def main() -> int:
 
         if args.command == "run":
             print(f"Running {app_name.name}...\n{'-'*30}")
-            result = subprocess.run([str(app_name.resolve())])
+            program_args = list(args.program_args)
+            if program_args and program_args[0] == "--":
+                program_args = program_args[1:]
+            result = subprocess.run([str(app_name.resolve()), *program_args])
             return result.returncode if result.returncode >= 0 else 1
 
     except KineticError as error:

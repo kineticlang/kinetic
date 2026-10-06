@@ -5,7 +5,7 @@
 Kinetic's next major destination is **self-hosting**: a compiler written in
 Kinetic that can compile its own source and build a working successor compiler.
 
-The current compiler is a Python 1.2.2 prototype. It is not self-hosting, and no
+The current compiler is a Python 1.4.0 prototype. It is not self-hosting, and no
 compiler stage has been ported to Kinetic yet. The language and runtime need
 additional capabilities before that port is practical.
 
@@ -133,7 +133,15 @@ observed local or hosted results, not from configuration or written tests alone.
   allocation-failure regression coverage remains.
 - [ ] Defined allocation and lifetime rules for compiler-owned data, with checks
   appropriate to the chosen design.
-- [ ] File input/output, command-line arguments, diagnostics, and error/status reporting.
+- [x] File input/output, command-line arguments, diagnostics, and error/status
+  reporting (1.4.0): the `read_file`, `write_file`, `arg_count`, `arg`,
+  `eprint`, and `exit` builtins lower to C library calls. Generated `main`
+  functions capture `argc`/`argv`; `arg` reads are bounds-guarded, file
+  failures trap, `eprint` writes to standard error, and the CLI's run command
+  forwards trailing program arguments and propagates exit statuses. These are
+  trap-on-failure language builtins, not the status-returning host adapter in
+  the [bootstrap interface](docs/bootstrap_interface.md); they do not provide
+  streaming, partial reads, or directory operations.
 - [ ] Multi-file organization and a way to resolve compiler modules.
 - [x] A documented interface to native services and the LLVM/Clang toolchain
   that does not require Python-specific llvmlite APIs inside Kinetic code

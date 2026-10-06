@@ -23,6 +23,38 @@ from .types import FunctionType, KType
 
 
 class TypeAnalyzer:
+    _IO_SIGNATURES = {
+        "read_file": (
+            "read_file expects exactly one string path",
+            (("read_file path", KType.STRING),),
+            KType.STRING,
+        ),
+        "write_file": (
+            "write_file expects a string path and string contents",
+            (
+                ("write_file path", KType.STRING),
+                ("write_file contents", KType.STRING),
+            ),
+            KType.VOID,
+        ),
+        "arg_count": ("arg_count expects no arguments", (), KType.INT),
+        "arg": (
+            "arg expects exactly one integer index",
+            (("arg index", KType.INT),),
+            KType.STRING,
+        ),
+        "eprint": (
+            "eprint expects exactly one string message",
+            (("eprint message", KType.STRING),),
+            KType.VOID,
+        ),
+        "exit": (
+            "exit expects exactly one integer status code",
+            (("exit status code", KType.INT),),
+            KType.VOID,
+        ),
+    }
+
     def __init__(self, program: Program, diagnostics: Diagnostics | None = None):
         self.program = program
         self.diagnostics = (
@@ -40,7 +72,10 @@ class TypeAnalyzer:
             )
 
         reserved_names = (
-            "len", "slice", "printf", "malloc", "strlen", "strcmp", "memcpy"
+            "len", "slice", "printf", "malloc", "strlen", "strcmp", "memcpy",
+            "read_file", "write_file", "arg_count", "arg", "eprint", "exit",
+            "fopen", "fclose", "fread", "fwrite", "fseek", "ftell", "fprintf",
+            "__acrt_iob_func", "stderr", "__stderrp",
         )
         for function in program.functions:
             if function.name in reserved_names:
@@ -594,6 +629,18 @@ class TypeAnalyzer:
                 self._unify(argument_type, wanted, context)
                 self._constrain_name(argument, wanted, environment)
             return KType.STRING
+        io_signature = self._IO_SIGNATURES.get(expression.callee)
+        if io_signature is not None:
+            message, parameters, result = io_signature
+            if len(argument_types) != len(parameters):
+                line, column = self._location_of(expression)
+                raise CompileError(message, line, column)
+            for argument, argument_type, (context, wanted) in zip(
+                expression.arguments, argument_types, parameters
+            ):
+                self._unify(argument_type, wanted, context)
+                self._constrain_name(argument, wanted, environment)
+            return result
         if expression.callee == "print":
             printable_types = (KType.INT, KType.STRING)
             if not self._final_validation:

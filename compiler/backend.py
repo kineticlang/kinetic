@@ -63,7 +63,9 @@ class LLVMBackend:
         for function in self.program.functions:
             signature = self.function_types[function.name]
             if function.name == "main":
-                llvm_signature = ir.FunctionType(self.i32, [])
+                llvm_signature = ir.FunctionType(
+                    self.i32, [self.i32, self.ptr.as_pointer()]
+                )
             else:
                 llvm_signature = ir.FunctionType(
                     self._llvm_type(signature.result),
@@ -74,11 +76,17 @@ class LLVMBackend:
             )
             for argument, name in zip(llvm_function.args, function.parameters):
                 argument.name = name
+            if function.name == "main":
+                llvm_function.args[0].name = "argc"
+                llvm_function.args[1].name = "argv"
             self.functions[function.name] = llvm_function
 
     def _emit_function(self, function: Function) -> None:
         llvm_function = self.functions[function.name]
         builder = ir.IRBuilder(llvm_function.append_basic_block("entry"))
+        if function.name == "main":
+            builder.store(llvm_function.args[0], self._argc_global())
+            builder.store(llvm_function.args[1], self._argv_global())
         environment = dict(zip(function.parameters, llvm_function.args))
         mutables: set[str] = set()
 
@@ -306,6 +314,136 @@ class LLVMBackend:
             )
         return function
 
+    def _c_long_type(self) -> ir.Type:
+        if "windows" in self.module.triple.lower():
+            return self.i32
+        return self.i64
+
+    def _fopen(self) -> ir.Function:
+        function = self.module.globals.get("fopen")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(self.ptr, [self.ptr, self.ptr]),
+                name="fopen",
+            )
+        return function
+
+    def _fclose(self) -> ir.Function:
+        function = self.module.globals.get("fclose")
+        if function is None:
+            function = ir.Function(
+                self.module, ir.FunctionType(self.i32, [self.ptr]), name="fclose"
+            )
+        return function
+
+    def _fread(self) -> ir.Function:
+        function = self.module.globals.get("fread")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(
+                    self.i64, [self.ptr, self.i64, self.i64, self.ptr]
+                ),
+                name="fread",
+            )
+        return function
+
+    def _fwrite(self) -> ir.Function:
+        function = self.module.globals.get("fwrite")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(
+                    self.i64, [self.ptr, self.i64, self.i64, self.ptr]
+                ),
+                name="fwrite",
+            )
+        return function
+
+    def _fseek(self) -> ir.Function:
+        function = self.module.globals.get("fseek")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(
+                    self.i32, [self.ptr, self._c_long_type(), self.i32]
+                ),
+                name="fseek",
+            )
+        return function
+
+    def _ftell(self) -> ir.Function:
+        function = self.module.globals.get("ftell")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(self._c_long_type(), [self.ptr]),
+                name="ftell",
+            )
+        return function
+
+    def _fprintf(self) -> ir.Function:
+        function = self.module.globals.get("fprintf")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(self.i32, [self.ptr, self.ptr], var_arg=True),
+                name="fprintf",
+            )
+        return function
+
+    def _exit(self) -> ir.Function:
+        function = self.module.globals.get("exit")
+        if function is None:
+            function = ir.Function(
+                self.module,
+                ir.FunctionType(ir.VoidType(), [self.i32]),
+                name="exit",
+            )
+        return function
+
+    def _argc_global(self) -> ir.GlobalVariable:
+        value = self.module.globals.get("__kn_argc")
+        if value is None:
+            value = ir.GlobalVariable(self.module, self.i32, name="__kn_argc")
+            value.linkage = "internal"
+            value.initializer = ir.Constant(self.i32, 0)
+        return value
+
+    def _argv_global(self) -> ir.GlobalVariable:
+        value = self.module.globals.get("__kn_argv")
+        if value is None:
+            value = ir.GlobalVariable(
+                self.module, self.ptr.as_pointer(), name="__kn_argv"
+            )
+            value.linkage = "internal"
+            value.initializer = ir.Constant(self.ptr.as_pointer(), None)
+        return value
+
+    def _stderr_stream(self, builder: ir.IRBuilder) -> ir.Value:
+        triple = self.module.triple.lower()
+        if "windows" in triple:
+            function = self.module.globals.get("__acrt_iob_func")
+            if function is None:
+                function = ir.Function(
+                    self.module,
+                    ir.FunctionType(self.ptr, [self.i32]),
+                    name="__acrt_iob_func",
+                )
+            return builder.call(
+                function, [ir.Constant(self.i32, 2)], name="stderr.stream"
+            )
+        global_name = (
+            "__stderrp"
+            if "apple" in triple or "darwin" in triple
+            else "stderr"
+        )
+        stream = self.module.globals.get(global_name)
+        if stream is None:
+            stream = ir.GlobalVariable(self.module, self.ptr, name=global_name)
+        return builder.load(stream, name="stderr.stream")
+
     def _emit_binary(
         self,
         expression: BinaryExpr,
@@ -403,6 +541,82 @@ class LLVMBackend:
         builder.store(ir.Constant(self.i8, 0), nul_ptr)
         return buffer
 
+    def _emit_read_file(self, path: ir.Value, builder: ir.IRBuilder) -> ir.Value:
+        mode = self._global_string("rb", builder, "mode.read")
+        handle = builder.call(self._fopen(), [path, mode], name="read.handle")
+        opened = builder.icmp_signed(
+            "!=", handle, ir.Constant(handle.type, None), name="read.opened"
+        )
+        self._emit_bounds_guard(builder, opened)
+
+        long_type = self._c_long_type()
+        zero_long = ir.Constant(long_type, 0)
+        builder.call(
+            self._fseek(),
+            [handle, zero_long, ir.Constant(self.i32, 2)],
+            name="read.seek_end",
+        )
+        size = builder.call(self._ftell(), [handle], name="read.size")
+        size_ok = builder.icmp_signed(">=", size, zero_long, name="read.size_ok")
+        self._emit_bounds_guard(builder, size_ok)
+        if long_type is not self.i64:
+            size = builder.sext(size, self.i64, name="read.size64")
+        builder.call(
+            self._fseek(),
+            [handle, zero_long, ir.Constant(self.i32, 0)],
+            name="read.seek_start",
+        )
+
+        alloc_size = builder.add(
+            size, ir.Constant(self.i64, 1), name="read.alloc_size"
+        )
+        buffer = self._emit_string_alloc(builder, alloc_size, "read")
+        count = builder.call(
+            self._fread(),
+            [buffer, ir.Constant(self.i64, 1), size, handle],
+            name="read.count",
+        )
+        complete = builder.icmp_signed("==", count, size, name="read.complete")
+        self._emit_bounds_guard(builder, complete)
+        builder.call(self._fclose(), [handle], name="read.close")
+        nul = builder.gep(buffer, [size], name="read.nul")
+        builder.store(ir.Constant(self.i8, 0), nul)
+        return buffer
+
+    def _emit_write_file(
+        self, path: ir.Value, contents: ir.Value, builder: ir.IRBuilder
+    ) -> None:
+        mode = self._global_string("wb", builder, "mode.write")
+        handle = builder.call(self._fopen(), [path, mode], name="write.handle")
+        opened = builder.icmp_signed(
+            "!=", handle, ir.Constant(handle.type, None), name="write.opened"
+        )
+        self._emit_bounds_guard(builder, opened)
+        length = builder.call(self._strlen(), [contents], name="write.length")
+        written = builder.call(
+            self._fwrite(),
+            [contents, ir.Constant(self.i64, 1), length, handle],
+            name="write.count",
+        )
+        complete = builder.icmp_signed("==", written, length, name="write.complete")
+        self._emit_bounds_guard(builder, complete)
+        builder.call(self._fclose(), [handle], name="write.close")
+
+    def _emit_arg_count(self, builder: ir.IRBuilder) -> ir.Value:
+        argc = builder.load(self._argc_global(), name="argc.load")
+        count = builder.sub(argc, ir.Constant(self.i32, 1), name="argc.user")
+        return builder.sext(count, self.i64, name="arg.count")
+
+    def _emit_arg(self, index: ir.Value, builder: ir.IRBuilder) -> ir.Value:
+        argc = builder.load(self._argc_global(), name="argc.load")
+        count = builder.sub(argc, ir.Constant(self.i32, 1), name="argc.user")
+        length = builder.sext(count, self.i64, name="arg.length")
+        self._emit_index_guard(builder, index, length)
+        argv = builder.load(self._argv_global(), name="argv.load")
+        shifted = builder.add(index, ir.Constant(self.i64, 1), name="arg.shifted")
+        slot = builder.gep(argv, [shifted], name="arg.slot")
+        return builder.load(slot, name="arg.value")
+
     def _emit_call(
         self,
         expression: CallExpr,
@@ -421,6 +635,24 @@ class LLVMBackend:
             return builder.extract_value(argument, 1, name="array.length")
         if expression.callee == "slice":
             return self._emit_slice(arguments[0], arguments[1], arguments[2], builder)
+        if expression.callee == "read_file":
+            return self._emit_read_file(arguments[0], builder)
+        if expression.callee == "write_file":
+            self._emit_write_file(arguments[0], arguments[1], builder)
+            return None
+        if expression.callee == "arg_count":
+            return self._emit_arg_count(builder)
+        if expression.callee == "arg":
+            return self._emit_arg(arguments[0], builder)
+        if expression.callee == "eprint":
+            stream = self._stderr_stream(builder)
+            format_string = self._global_string("%s\n", builder, "fmt.err")
+            builder.call(self._fprintf(), [stream, format_string, arguments[0]])
+            return None
+        if expression.callee == "exit":
+            code = builder.trunc(arguments[0], self.i32, name="exit.code")
+            builder.call(self._exit(), [code])
+            return None
         if expression.callee == "print":
             self._emit_print(arguments[0], builder)
             return None

@@ -24,6 +24,11 @@ python -B -m unittest discover -s tests -p test_layout.py -v
 - Keep roadmap status factual. The [host interface specification](docs/bootstrap_interface.md)
   is a design, not an implemented host adapter. Bounds checks do not provide
   lifetime safety, and Kinetic is not yet self-hosting.
+- Update every Markdown file affected by a change in the same change — root
+  guides, docs, directory READMEs, and the agent guidance files — so no
+  document is left stale. Static checks do not cover compiler behavior: hosted
+  GitHub CI runs the frontend/backend suites with llvmlite and the native
+  example suite with Clang, and those results are the behavioral evidence.
 
 Maintain detailed rules in [AGENTS.md](AGENTS.md), not a separate competing copy
 here. [CLAUDE.md](CLAUDE.md) is the Claude Code entry point for the same guidance.

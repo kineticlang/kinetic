@@ -24,6 +24,7 @@ EXPECTED = {
     ),
     "10_text.kn": "Text operations:\n7\n75\nKin\nHello, Kinetic!\nequal\nordered\n",
     "11_indexed_writes.kn": "20\n99\n11\n100\n31\n7\n",
+    "12_host_io.kn": "User arguments:\n0\n15\nkinetic file io\nDone\n",
 }
 
 
@@ -56,7 +57,7 @@ class NativeExampleTests(unittest.TestCase):
                     )
                     self.assertIn(expected_output, result.stdout)
 
-    def _run_source(self, source):
+    def _run_source(self, source, args=()):
         from compiler.compiler import compile_source
 
         with tempfile.TemporaryDirectory() as directory:
@@ -69,7 +70,7 @@ class NativeExampleTests(unittest.TestCase):
                 capture_output=True, text=True, check=True, timeout=30,
             )
             return subprocess.run(
-                [str(binary)], cwd=directory, capture_output=True, text=True, timeout=10
+                [str(binary), *args], cwd=directory, capture_output=True, text=True, timeout=10
             )
 
     def test_lengths_and_reads_survive_copies_calls_and_branches(self):
@@ -175,7 +176,10 @@ class NativeExampleTests(unittest.TestCase):
 
     def test_runtime_failure_examples_exit_unsuccessfully(self):
         root = Path(__file__).resolve().parents[1] / "examples" / "runtime_errors"
-        for name in ("out_of_bounds.kn", "negative_index.kn"):
+        for name in (
+            "out_of_bounds.kn", "negative_index.kn",
+            "arg_out_of_range.kn", "read_missing_file.kn",
+        ):
             with self.subTest(example=name):
                 result = self._run_source((root / name).read_text(encoding="utf-8"))
                 self.assertNotEqual(result.returncode, 0)
@@ -277,6 +281,61 @@ class NativeExampleTests(unittest.TestCase):
             "slice_end": 'print(slice("ab", 0, 3))',
             "slice_order": 'print(slice("ab", 2, 1))',
             "slice_negative": 'print(slice("ab", 0 - 1, 1))',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                result = self._run_source(
+                    "func main() { " + body + ' print("Unreachable") }'
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("Unreachable", result.stdout)
+
+    def test_program_arguments_are_forwarded(self):
+        result = self._run_source(
+            "func main() {\n"
+            "  print(arg_count())\n"
+            "  mut index = 0\n"
+            "  while index < arg_count() { print(arg(index)) index = index + 1 }\n"
+            "}",
+            args=("alpha", "beta"),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "2\nalpha\nbeta\n")
+
+    def test_exit_sets_the_process_status(self):
+        for code in (0, 3):
+            with self.subTest(code=code):
+                result = self._run_source(
+                    "func main() { print(" + str(code) + ") exit(" + str(code) + ") }"
+                )
+                self.assertEqual(result.returncode, code)
+                self.assertEqual(result.stdout, str(code) + "\n")
+
+    def test_eprint_writes_to_the_diagnostic_stream_only(self):
+        result = self._run_source(
+            'func main() { eprint("diagnostic") print("standard") }'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "standard\n")
+        self.assertEqual(result.stderr, "diagnostic\n")
+
+    def test_file_write_and_read_round_trip(self):
+        result = self._run_source(
+            'func main() {\n'
+            '  write_file("round_trip.txt", "abc")\n'
+            '  let text = read_file("round_trip.txt")\n'
+            "  print(text)\n"
+            "  print(len(text))\n"
+            "}"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "abc\n3\n")
+
+    def test_host_io_failures_trap_without_reaching_following_code(self):
+        cases = {
+            "missing_file": 'print(read_file("definitely_missing_input.txt"))',
+            "arg_out_of_range": "print(arg(0))",
+            "arg_negative": "print(arg(0 - 1))",
         }
         for name, body in cases.items():
             with self.subTest(case=name):

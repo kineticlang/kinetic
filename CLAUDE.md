@@ -7,7 +7,7 @@ truth for repository structure, compiler boundaries, and verification rules.
 
 ## Working context
 
-- Kinetic is a 1.3.0 prototype compiler written in Python, using llvmlite and Clang.
+- Kinetic is a 1.4.0 prototype compiler written in Python, using llvmlite and Clang.
 - Compiler modules live directly in the [compiler package](compiler/README.md).
   Keep imports package-relative and avoid adding wrapper packages.
 - The [root launcher](kinetic.py) delegates to the same CLI as the installed command.
@@ -35,12 +35,17 @@ matrix, a frontend/backend job with llvmlite installed, and a native job that
 enables native testing and builds and runs the example suite with Clang. Keep
 local and hosted test logic aligned.
 
+Keep every Markdown file synchronized with each change — the root guides, docs,
+directory READMEs, and the agent guidance files — so no document is left
+describing a previous state. Local static checks never cover IR or runtime
+behavior; the hosted llvmlite and Clang CI jobs are the evidence for those.
+
 ## Roadmap discipline
 
 Read [ROADMAP.md](ROADMAP.md) when planning language work. Self-hosting is a future
 target, not an existing capability. Keep implemented functionality, planning,
 and future work distinct; do not mark a milestone complete without evidence.
-The 1.3.0 prototype does not provide a production memory-safety model. Array
+The 1.4.0 prototype does not provide a production memory-safety model. Array
 lengths and runtime read guards are implemented; array element storage is
 heap-allocated and lives until process exit without reclamation, which is a
 deliberate leak rather than a general lifetime-safety model. Failed nonempty-array

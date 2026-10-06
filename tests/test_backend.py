@@ -299,6 +299,73 @@ class BackendTests(unittest.TestCase):
         self.assertIn("load {i64*, i64}", llvm_ir)
         self.assertIn("store i64 9", llvm_ir)
 
+    def test_main_captures_process_arguments(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source("func main() { print(0) }")
+        self.assertIn('define i32 @"main"(i32 %argc, i8** %argv)', llvm_ir)
+        self.assertIn("store i32 %argc", llvm_ir)
+        self.assertIn("store i8** %argv", llvm_ir)
+        self.assertIn("__kn_argc", llvm_ir)
+        self.assertIn("__kn_argv", llvm_ir)
+
+    def test_arg_count_subtracts_the_executable_name(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source("func main() { print(arg_count()) }")
+        self.assertIn("sub i32", llvm_ir)
+        self.assertIn("sext i32", llvm_ir)
+        self.assertNotIn('@"arg_count"', llvm_ir)
+
+    def test_arg_guards_then_indexes_past_the_executable_name(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source("func main() { print(arg(0)) }")
+        self.assertIn("bounds.fail", llvm_ir)
+        self.assertIn('call void @"llvm.trap"()', llvm_ir)
+        self.assertIn("add i64", llvm_ir)
+        self.assertIn("getelementptr i8*", llvm_ir)
+
+    def test_read_file_lowers_to_guarded_c_stdio_calls(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source('func main() { print(read_file("data.txt")) }')
+        self.assertIn('declare i8* @"fopen"(i8*', llvm_ir)
+        self.assertIn('declare i64 @"fread"(i8*', llvm_ir)
+        self.assertIn('declare i32 @"fclose"(i8*', llvm_ir)
+        self.assertIn('@"fseek"', llvm_ir)
+        self.assertIn('@"ftell"', llvm_ir)
+        self.assertIn('call void @"llvm.trap"()', llvm_ir)
+        self.assertIn("store i8 0", llvm_ir)
+
+    def test_write_file_lowers_to_guarded_c_stdio_calls(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source('func main() { write_file("out.txt", "data") }')
+        self.assertIn('declare i64 @"fwrite"(i8*', llvm_ir)
+        self.assertIn('call i64 @"fwrite"', llvm_ir)
+        self.assertIn('call void @"llvm.trap"()', llvm_ir)
+
+    def test_eprint_writes_data_not_format_to_the_diagnostic_stream(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source('func main() { eprint("oops") }')
+        self.assertIn('declare i32 @"fprintf"(i8*', llvm_ir)
+        self.assertIn('c"%s\\0A\\00"', llvm_ir)
+        self.assertTrue(
+            "stderr" in llvm_ir
+            or "__stderrp" in llvm_ir
+            or "__acrt_iob_func" in llvm_ir
+        )
+
+    def test_exit_calls_the_c_exit_with_a_truncated_code(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source("func main() { exit(3) }")
+        self.assertIn('declare void @"exit"(i32)', llvm_ir)
+        self.assertIn("trunc i64 3 to i32", llvm_ir)
+        self.assertIn('call void @"exit"', llvm_ir)
+
 
 if __name__ == "__main__":
     unittest.main()

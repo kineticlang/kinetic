@@ -1,6 +1,6 @@
 # Kinetic examples
 
-These are complete programs for learning and experimenting with the 1.3.0 language.
+These are complete programs for learning and experimenting with the 1.4.0 language.
 
 | Program | Focus |
 | --- | --- |
@@ -15,6 +15,7 @@ These are complete programs for learning and experimenting with the 1.3.0 langua
 | [Array lifetimes](09_array_lifetimes.kn) | Read a locally created array after its helper returns and another helper allocates an array. |
 | [Text operations](10_text.kn) | String length, byte reads, comparisons, slicing, and concatenation. |
 | [Indexed writes](11_indexed_writes.kn) | In-place element writes through mutable bindings, visible through aliases. |
+| [Host I/O](12_host_io.kn) | Program arguments, whole-file read/write, diagnostic output, and exit status. |
 
 Read the [syntax guide](../docs/syntax_guide.md) for the language rules.
 
@@ -78,6 +79,24 @@ Expected output for the [indexed-writes example](11_indexed_writes.kn):
 31
 7
 ```
+
+Expected output for the [host-I/O example](12_host_io.kn) when run without
+program arguments:
+
+```text
+User arguments:
+0
+15
+kinetic file io
+Done
+```
+
+The example writes a `12_host_io_scratch.txt` file into the current working
+directory and reads it back; the file is ignored by version control and can be
+deleted after a run. The `eprint` line goes to standard error and is not part
+of the expected standard output. Extra arguments after the source path are
+forwarded to the program, so `python kinetic.py run examples/12_host_io.kn
+alpha beta` lists `alpha` and `beta` after the argument count.
 
 These are program output expectations, excluding the launcher's build/run
 messages. The hosted native CI job builds and runs every numbered example with

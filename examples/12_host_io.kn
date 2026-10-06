@@ -1,0 +1,23 @@
+// Host I/O builtins: process arguments, file read/write, diagnostic output,
+// and an explicit exit status. Run with extra arguments to see them listed:
+// python kinetic.py run examples/12_host_io.kn alpha beta
+
+func main() {
+    print("User arguments:")
+    print(arg_count())
+
+    mut index = 0
+    while index < arg_count() {
+        print(arg(index))
+        index = index + 1
+    }
+
+    write_file("12_host_io_scratch.txt", "kinetic file io")
+    let text = read_file("12_host_io_scratch.txt")
+    print(len(text))
+    print(text)
+
+    eprint("diagnostic stream works")
+    print("Done")
+    exit(0)
+}

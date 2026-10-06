@@ -715,6 +715,96 @@ class StringOperationTests(unittest.TestCase):
                 )
 
 
+class HostBuiltinTests(unittest.TestCase):
+    def test_arg_count_returns_int(self):
+        types, _ = analyze("func main() { print(arg_count()) }")
+        self.assertEqual(types["main"].result.name, "INT")
+
+    def test_arg_returns_string_and_constrains_index(self):
+        types, _ = analyze(
+            "func pick(index) { arg(index) }\n"
+            "func main() { print(pick(0)) }"
+        )
+        self.assertEqual(types["pick"].parameters[0].name, "INT")
+        self.assertEqual(types["pick"].result.name, "STRING")
+
+    def test_read_file_returns_string_and_constrains_path(self):
+        types, _ = analyze(
+            "func load(path) { read_file(path) }\n"
+            'func main() { print(load("input.txt")) }'
+        )
+        self.assertEqual(types["load"].parameters[0].name, "STRING")
+        self.assertEqual(types["load"].result.name, "STRING")
+
+    def test_write_file_constrains_both_arguments(self):
+        types, _ = analyze(
+            "func save(path, contents) { write_file(path, contents) }\n"
+            'func main() { save("out.txt", "data") }'
+        )
+        self.assertEqual(
+            [kind.name for kind in types["save"].parameters], ["STRING", "STRING"]
+        )
+        self.assertEqual(types["save"].result.name, "VOID")
+
+    def test_eprint_constrains_message_and_returns_void(self):
+        types, _ = analyze(
+            "func report(message) { eprint(message) }\n"
+            'func main() { report("x") }'
+        )
+        self.assertEqual(types["report"].parameters[0].name, "STRING")
+        self.assertEqual(types["report"].result.name, "VOID")
+
+    def test_exit_constrains_code_and_keeps_main_integer(self):
+        types, _ = analyze(
+            "func stop(code) { exit(code) }\n"
+            "func main() { stop(0) }"
+        )
+        self.assertEqual(types["stop"].parameters[0].name, "INT")
+        self.assertEqual(types["stop"].result.name, "VOID")
+        self.assertEqual(types["main"].result.name, "INT")
+
+    def test_builtin_arity_and_type_errors(self):
+        cases = {
+            "arg_count(1)": "arg_count expects no arguments",
+            "arg()": "arg expects exactly one integer index",
+            'arg("0")': "type mismatch in arg index",
+            "read_file()": "read_file expects exactly one string path",
+            "read_file(1)": "type mismatch in read_file path",
+            'write_file("a")': "write_file expects a string path and string contents",
+            'write_file("a", 1)': "type mismatch in write_file contents",
+            'write_file(1, "a")': "type mismatch in write_file path",
+            "eprint()": "eprint expects exactly one string message",
+            "eprint(1)": "type mismatch in eprint message",
+            "exit()": "exit expects exactly one integer status code",
+            'exit("x")': "type mismatch in exit status code",
+        }
+        for expression, expected in cases.items():
+            with self.subTest(expression=expression):
+                with self.assertRaises(CompileError) as raised:
+                    analyze("func main() { " + expression + " }")
+                self.assertIn(expected, str(raised.exception))
+
+    def test_void_builtins_cannot_be_bound(self):
+        for expression in ('write_file("a", "b")', 'eprint("a")', "exit(1)"):
+            with self.subTest(expression=expression):
+                with self.assertRaises(CompileError) as raised:
+                    analyze("func main() { let value = " + expression + " }")
+                self.assertIn("cannot bind a void expression", str(raised.exception))
+
+    def test_host_builtins_cannot_be_redefined(self):
+        for name in (
+            "read_file", "write_file", "arg_count", "arg", "eprint", "exit",
+            "fopen", "fclose", "fread", "fwrite", "fseek", "ftell", "fprintf",
+            "__acrt_iob_func", "stderr", "__stderrp",
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(CompileError) as raised:
+                    analyze("func " + name + "(value) { value }\nfunc main() {}")
+                self.assertIn(
+                    "cannot redefine builtin '" + name + "'", str(raised.exception)
+                )
+
+
 class RunExitStatusTests(unittest.TestCase):
     def test_run_preserves_failure_status(self):
         from contextlib import redirect_stdout
@@ -784,7 +874,7 @@ class DiagnosticExampleTests(unittest.TestCase):
             "04_bounds_checked.kn", "05_mutability.kn",
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
-            "10_text.kn", "11_indexed_writes.kn",
+            "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
         ):
             with self.subTest(example=name):
                 text = Path("examples", name).read_text(encoding="utf-8")

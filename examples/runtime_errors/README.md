@@ -1,13 +1,16 @@
 # Runtime bounds failures
 
-These 1.3.0 programs are intentionally **not** success examples. Their index
-expressions pass compile-time analysis, but the generated executable terminates
-at a bounds check before accessing an invalid element.
+These 1.4.0 programs are intentionally **not** success examples. Their index
+expressions and host calls pass compile-time analysis, but the generated
+executable terminates at a runtime guard before completing the invalid
+operation.
 
 | Program | Reason for termination |
 | --- | --- |
 | [Upper bound](out_of_bounds.kn) | The index equals the array's length. |
 | [Negative index](negative_index.kn) | The index is below zero. |
+| [Argument out of range](arg_out_of_range.kn) | No program argument exists at index 0. |
+| [Missing input file](read_missing_file.kn) | The file cannot be opened for reading. |
 
 When native execution is permitted:
 

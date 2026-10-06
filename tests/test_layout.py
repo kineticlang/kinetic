@@ -45,7 +45,7 @@ class RepositoryLayoutTests(unittest.TestCase):
             "04_bounds_checked.kn", "05_mutability.kn",
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
-            "10_text.kn", "11_indexed_writes.kn",
+            "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
         ):
             with self.subTest(example=name):
                 self.assertTrue((ROOT / "examples" / name).is_file())
@@ -61,7 +61,10 @@ class RepositoryLayoutTests(unittest.TestCase):
         for name in ("unused_variable.kn", "shadowing.kn"):
             with self.subTest(warning_example=name):
                 self.assertTrue((ROOT / "examples" / "warnings" / name).is_file())
-        for name in ("out_of_bounds.kn", "negative_index.kn"):
+        for name in (
+            "out_of_bounds.kn", "negative_index.kn",
+            "arg_out_of_range.kn", "read_missing_file.kn",
+        ):
             with self.subTest(runtime_example=name):
                 self.assertTrue((ROOT / "examples" / "runtime_errors" / name).is_file())
 

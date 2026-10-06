@@ -1,0 +1,7 @@
+// This program passes frontend analysis but traps when the executable runs.
+// Reading a file that does not exist fails the open guard.
+
+func main() {
+    print(read_file("no_such_input_file.txt"))
+    print("Unreachable")
+}

@@ -13,6 +13,11 @@ logic must not depend on Python objects or llvmlite APIs. The initial adapter
 uses the target's C calling convention; it does not expose LLVM's in-process API.
 The eventual foreign-call syntax is a separate language-design task.
 
+Kinetic 1.4.0 adds language builtins for whole-file reads and writes, program
+arguments, diagnostic output, and process exit. Those builtins trap on failure
+and return no status values; they are conveniences for current programs, not an
+implementation of the status-returning session operations specified below.
+
 ## Examples using current features
 
 - [Status-code handling](../examples/06_status_handling.kn): a self-contained

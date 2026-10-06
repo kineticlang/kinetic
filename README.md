@@ -4,7 +4,7 @@ A small language compiler, written in Python and targeting LLVM.
 
 [Language guide](docs/syntax_guide.md) · [Architecture](docs/architecture.md) · [Installation](INSTALL.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
 
-Kinetic is an early compiler prototype (1.3.0). It reads Kinetic source, performs
+Kinetic is an early compiler prototype (1.4.0). It reads Kinetic source, performs
 lexical, syntactic, and type analysis, emits verified textual LLVM IR through
 llvmlite, and uses Clang to produce a native executable.
 
@@ -22,6 +22,7 @@ memory-safety model.
 - Array element counts through the length builtin and runtime checks on indexed reads and writes.
 - String length, byte reads, bytewise comparisons, slicing, and concatenation.
 - A built-in printing operation for one integer or string at a time.
+- Host I/O builtins for files, program arguments, diagnostic output, and exit status.
 
 Start with the [language guide](docs/syntax_guide.md) and the programs in
 [examples](examples/README.md).
@@ -76,7 +77,7 @@ one clear location.
 | --- | --- |
 | [Compiler](compiler/README.md) | A flat Python package containing all compiler stages and the CLI. |
 | [Documentation](docs/README.md) | Language reference, architecture, and repository design. |
-| [Examples](examples/README.md) | Eleven numbered programs plus compile-time error, runtime-failure, and warning examples for 1.3.0. |
+| [Examples](examples/README.md) | Twelve numbered programs plus compile-time error, runtime-failure, and warning examples for 1.4.0. |
 | [Tools](tools/README.md) | Repository maintenance utilities, separate from the compiler CLI. |
 | [Tests](tests/README.md) | Separate layout, frontend, backend, and opt-in native suites. |
 | [Package configuration](pyproject.toml) | Python packaging and the optional installed command. |
@@ -102,10 +103,20 @@ requests, and manual dispatches. Its Windows/Linux matrix runs the general
 runner on Python 3.10 and 3.14 without installing llvmlite. A separate Ubuntu
 Python 3.10 job installs the runtime dependency and runs frontend/backend tests.
 A third Ubuntu job enables native testing and uses the runner-provided Clang
-toolchain to build and execute all eleven numbered examples plus the
+toolchain to build and execute all twelve numbered examples plus the
 runtime-failure programs. A passing native job verifies the covered end-to-end
 behavior for that revision; configuration alone is not evidence of success. See
 [contributing](CONTRIBUTING.md).
+
+### New in 1.4.0
+
+Host I/O builtins: `read_file` and `write_file` transfer whole files as
+strings, `arg_count` and `arg` expose program arguments (the run command
+forwards trailing arguments), `eprint` writes diagnostics to standard error,
+and `exit` terminates the process with a chosen status. File failures and
+out-of-range argument reads trap at runtime; these are language builtins, not
+the status-returning host adapter in the bootstrap interface specification.
+The [host-I/O example](examples/12_host_io.kn) demonstrates each builtin.
 
 ### New in 1.3.0
 
@@ -163,7 +174,7 @@ the native suites on every push. The
 ## Direction
 
 The current goal is to build the foundations needed for a compiler written in
-Kinetic that can compile itself. Version 1.3.0 is not self-hosting yet. The
+Kinetic that can compile itself. Version 1.4.0 is not self-hosting yet. The
 [roadmap](ROADMAP.md) separates completed work, current planning, and future milestones.
 
 ## License

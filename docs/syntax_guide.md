@@ -1,6 +1,6 @@
 # The Kinetic Syntax Guide
 
-This guide describes the 1.3.0 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
+This guide describes the 1.4.0 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
 
 Kinetic uses concise declarations and compiles through LLVM. The examples below
 show current syntax, not the proposed bootstrap host-service API.
@@ -36,7 +36,7 @@ counter = counter + 1 // Reassignment has no declaration keyword.
 ```
 
 Binding immutability is not a general guarantee that referenced data is deeply
-immutable or memory-safe. Version 1.3.0 supports integer-array reads and
+immutable or memory-safe. Version 1.4.0 supports integer-array reads and
 indexed writes through mutable bindings, but does not implement a production
 memory-safety model.
 
@@ -50,7 +50,7 @@ func calculate_speed(distance, time) {
 }
 ```
 
-The `main` function is the entry point of your program. In the 1.3.0 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error. When you run your executable, this is where the action starts.
+The `main` function is the entry point of your program. In the 1.4.0 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error, and program arguments are instead available through the builtins in section 8. When you run your executable, this is where the action starts.
 
 ```text
 func main() {
@@ -78,7 +78,7 @@ if speed > speed_limit {
 }
 ```
 
-Comparisons in 1.3.0 are limited to equality, less-than, and greater-than. They
+Comparisons in 1.4.0 are limited to equality, less-than, and greater-than. They
 work on integers and, bytewise, on strings.
 
 ## 4. Loops (doing things repeatedly)
@@ -96,7 +96,7 @@ while i < 3 {
 
 ## 5. Arrays (lists of things)
 
-Version 1.3.0 arrays contain integers. Array literals, indexed reads, and
+Version 1.4.0 arrays contain integers. Array literals, indexed reads, and
 indexed writes through mutable bindings are supported;
 arrays of strings and mixed element types are not part of the current language.
 
@@ -237,6 +237,8 @@ Literals cannot contain NUL bytes, escaped or raw; the lexer rejects them
 because runtime storage is NUL-terminated. The function names `printf`,
 `malloc`, `strlen`, `strcmp`, and `memcpy` are reserved for the C runtime
 symbols the backend emits, alongside the builtin names `len` and `slice`.
+Section 8 adds the `read_file`, `write_file`, `arg_count`, `arg`, `eprint`,
+and `exit` builtins and reserves their C runtime symbols as well.
 
 Type inference defaults are unchanged: a parameter used only through `len`,
 indexing, or a binary operator, and never constrained by a call site, still
@@ -260,3 +262,53 @@ decoding remain unavailable. Integer arrays are not restricted to byte values.
 Both illustrate the [bootstrap interface design](bootstrap_interface.md) without
 implementing its native services. See the [example catalog](../examples/README.md)
 for expected outputs and separate error/warning demonstrations.
+
+## 8. Files, arguments, and process control
+
+Since 1.4.0, reserved builtins cover the host interactions a command-line
+program needs: reading and writing files, inspecting program arguments,
+writing diagnostics, and choosing the process exit status. They are compiler
+builtins handled in both analysis and code generation, lowering to C library
+calls; they are not the status-returning host adapter proposed in the
+[bootstrap interface](bootstrap_interface.md).
+
+```text
+func main() {
+    print(arg_count())
+    if arg_count() > 0 {
+        print(arg(0))
+    }
+    write_file("out.txt", "data")
+    print(read_file("out.txt"))
+    eprint("something failed")
+    exit(1)
+}
+```
+
+- `read_file(path)` returns the complete contents of the file at `path` as a
+  string. It traps when the file cannot be opened or read.
+- `write_file(path, contents)` truncates or creates the file at `path` with
+  the bytes of `contents`. It traps when the file cannot be opened or fully
+  written.
+- `arg_count()` returns how many arguments followed the executable name.
+- `arg(index)` returns the argument at zero-based `index`, where 0 is the
+  first user argument. An index outside `0 .. arg_count() - 1` traps at
+  runtime, guarded like an array read. The CLI's run command forwards
+  trailing arguments to the program:
+  `python kinetic.py run program.kn alpha beta`.
+- `eprint(message)` writes `message` and a newline to the diagnostic stream
+  (standard error), keeping failure reports separate from program output.
+- `exit(code)` terminates the process immediately with `code` as the exit
+  status; zero means success by convention. Like `print`, it produces no
+  value and cannot be bound with `let`.
+
+Arguments and file contents are strings, so the operations in section 6 apply
+to them. There are no directory, streaming, or partial-read operations yet,
+and failures trap instead of returning a recoverable status. The
+runtime-failure examples include
+[missing-file](../examples/runtime_errors/read_missing_file.kn) and
+[out-of-range argument](../examples/runtime_errors/arg_out_of_range.kn)
+programs. The names `fopen`, `fclose`, `fread`, `fwrite`, `fseek`, `ftell`,
+`fprintf`, `__acrt_iob_func`, `stderr`, and `__stderrp` are reserved for the
+C runtime symbols and stream accessors the backend emits. See the
+[host-I/O example](../examples/12_host_io.kn) for a complete program.
