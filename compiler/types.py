@@ -11,7 +11,12 @@ class KType(Enum):
     UNKNOWN = auto()
 
 
+@dataclass(frozen=True)
+class RecordType:
+    name: str
+
+
 @dataclass
 class FunctionType:
-    parameters: list[KType]
-    result: KType
+    parameters: list[KType | RecordType]
+    result: KType | RecordType

@@ -1,6 +1,6 @@
 # Compiler architecture
 
-Kinetic's 1.4.0 implementation lives in the [compiler source directory](../compiler/README.md).
+Kinetic's 1.5.0 implementation lives in the [compiler source directory](../compiler/README.md).
 It is a flat Python package with separate modules for each compilation stage.
 
 ## Entry points
@@ -74,6 +74,16 @@ elsewhere) and writes the message as data to a fixed format. `exit` truncates
 its integer argument to the C `int` status. These builtins are not the
 bootstrap host adapter; they return no recoverable status values.
 
+Since 1.5.0, `record` declarations define nominal value types. The analyzer
+resolves declared field types (`Int`, `String`, `[Int]`, or an earlier record)
+into a registry shared with construction calls, field reads, and field writes;
+it annotates field nodes with the resolved record so the backend can map
+fields to indices. The backend lowers each record to a literal LLVM struct,
+constructs values with `insertvalue` chains, reads fields with
+`extractvalue`, and writes fields through a `getelementptr` into the mutable
+binding's storage. Records are passed and returned by value as aggregates;
+recursive and forward field references are rejected during registration.
+
 ## Array representation and access checks
 
 The backend lowers integer arrays to an LLVM aggregate containing a data pointer
@@ -112,8 +122,8 @@ that pointer.
 Runtime range checks protect only the index range; neither they nor the
 allocation-failure guard reclaim storage, prevent unbounded growth, or
 constitute a production memory-safety model. The pointer/count representation
-was introduced as an internal ABI change in 1.2.0 and is unchanged in 1.2.1,
-1.3.0, and 1.4.0;
+was introduced as an internal ABI change in 1.2.0 and is unchanged through
+1.5.0;
 it is not the proposed host adapter's opaque-buffer ABI.
 
 The CLI preserves nonnegative child exit statuses and maps signal termination
@@ -145,7 +155,7 @@ the repository root; the installed command uses the same code.
 
 The [roadmap](../ROADMAP.md) tracks the language, runtime, and validation work
 needed before Kinetic can host its own compiler. Those planned components are
-not part of the 1.4.0 implementation described here.
+not part of the 1.5.0 implementation described here.
 
 The [bootstrap host interface](bootstrap_interface.md) specifies the future
 native-service boundary, buffer ownership, and textual-IR build protocol. It is
@@ -155,8 +165,10 @@ The [status](../examples/06_status_handling.kn),
 [byte-processing](../examples/07_byte_processing.kn), and
 [array-length](../examples/08_array_lengths.kn) demonstrations use the current
 compiler. The byte and length examples exercise the new builtin and array
-metadata, and the [host-I/O example](../examples/12_host_io.kn) exercises the
-1.4.0 file, argument, diagnostic, and exit builtins; none implements the host
+metadata, the [host-I/O example](../examples/12_host_io.kn) exercises the
+1.4.0 file, argument, diagnostic, and exit builtins, and the
+[records example](../examples/13_records.kn) exercises record construction,
+field reads, and guarded field writes; none implements the host
 adapter, buffer handles, or status-returning native services.
 
 Verification is split into [layout, frontend, backend, and native suites](../tests/README.md).

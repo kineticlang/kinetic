@@ -1,6 +1,6 @@
 # Agent guidance
 
-Kinetic is a 1.4.0 prototype language compiler written in Python. It emits textual
+Kinetic is a 1.5.0 prototype language compiler written in Python. It emits textual
 LLVM IR through llvmlite and invokes Clang for native binaries. Keep changes small
 and do not imply that the prototype provides a production memory-safety model.
 
@@ -76,6 +76,7 @@ python kinetic.py run examples/09_array_lifetimes.kn
 python kinetic.py run examples/10_text.kn
 python kinetic.py run examples/11_indexed_writes.kn
 python kinetic.py run examples/12_host_io.kn
+python kinetic.py run examples/13_records.kn
 ```
 
 **If the user asks not to compile or run programs, do not invoke these commands,
@@ -124,7 +125,11 @@ slice builtin takes a string with start and end indexes. The 1.4.0 host-I/O
 builtins — `read_file`, `write_file`, `arg_count`, `arg`, `eprint`, and
 `exit` — are likewise special-cased in both stages and lower to C library
 calls; generated `main` functions capture `argc`/`argv` into internal
-globals, `arg` reads are bounds-guarded, and file failures trap. Strings are immutable
+globals, `arg` reads are bounds-guarded, and file failures trap. The 1.5.0
+`record` declarations name typed fields (`Int`, `String`, `[Int]`, or an
+earlier record), construct positionally, and lower to LLVM value aggregates;
+field writes require a `mut` binding, and recursive or forward field
+references are rejected. Strings are immutable
 byte sequences: indexing reads one byte, `==`/`<`/`>` compare bytewise, and
 `+` concatenates; these lower to C's `strlen`, `strcmp`, `memcpy`, and `malloc`.
 Arrays lower to
@@ -143,15 +148,16 @@ the bounds check. The CLI propagates failed child exit statuses. Test
 [runtime failures](examples/runtime_errors/README.md)
 separately from success examples when native execution is permitted.
 
-The [syntax guide](docs/syntax_guide.md) documents the 1.4.0 language. The
-twelve numbered [examples](examples/README.md) cover inference, control flow,
-mutation, array lengths/lifetimes, indexed writes, text operations, and host
-I/O. Comparisons remain limited to
+The [syntax guide](docs/syntax_guide.md) documents the 1.5.0 language. The
+thirteen numbered [examples](examples/README.md) cover inference, control flow,
+mutation, array lengths/lifetimes, indexed writes, text operations, host
+I/O, and records. Comparisons remain limited to
 equality, less-than, and greater-than.
 
 Declarations use [`func`](compiler/lexer.py:33) for functions,
-[`let`](compiler/lexer.py:34) for immutable bindings, and standalone
-[`mut`](compiler/lexer.py:35) for mutable bindings. Keep lexer tokens, parser
+[`let`](compiler/lexer.py:34) for immutable bindings, standalone
+[`mut`](compiler/lexer.py:35) for mutable bindings, and
+[`record`](compiler/lexer.py:39) for record types. Keep lexer tokens, parser
 handling, examples, and documentation synchronized when syntax changes.
 
 See [architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md) before

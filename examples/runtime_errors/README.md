@@ -1,6 +1,6 @@
 # Runtime bounds failures
 
-These 1.4.0 programs are intentionally **not** success examples. Their index
+These 1.5.0 programs are intentionally **not** success examples. Their index
 expressions and host calls pass compile-time analysis, but the generated
 executable terminates at a runtime guard before completing the invalid
 operation.

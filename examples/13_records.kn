@@ -1,0 +1,38 @@
+// Records group named fields into one value. Construction is positional,
+// field reads work on any record value, and field writes require a mut
+// binding. Copies are by value, so later writes do not affect earlier copies.
+
+record Point {
+    x: Int
+    y: Int
+}
+
+record Buffer {
+    data: [Int]
+    size: Int
+}
+
+func distance_squared(point) {
+    point.x * point.x + point.y * point.y
+}
+
+func shift(point, dx, dy) {
+    Point(point.x + dx, point.y + dy)
+}
+
+func main() {
+    let origin = Point(0, 0)
+    mut point = Point(3, 4)
+    print(distance_squared(point))
+    point.x = 6
+    print(distance_squared(point))
+    print(point.y)
+    print(origin.x)
+
+    let moved = shift(origin, 1, 2)
+    print(moved.x + moved.y)
+
+    let buffer = Buffer([1, 2, 3], 3)
+    print(buffer.data[1])
+    print(len(buffer.data))
+}

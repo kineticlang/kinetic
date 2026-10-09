@@ -1,7 +1,7 @@
 # Compiler sources
 
 This directory is Kinetic's Python package. All compiler stages and the CLI live
-directly here, with one source file per concern. It implements Kinetic 1.4.0.
+directly here, with one source file per concern. It implements Kinetic 1.5.0.
 
 | Stage or concern | Source |
 | --- | --- |
@@ -29,7 +29,10 @@ See the [architecture guide](../docs/architecture.md) for dependencies between s
 The analyzer and backend jointly implement the array-length builtin. They likewise
 share the 1.4.0 host-I/O builtins (`read_file`, `write_file`, `arg_count`, `arg`,
 `eprint`, `exit`), which lower to C library calls; generated `main` functions
-capture `argc`/`argv` for the argument builtins. The backend
+capture `argc`/`argv` for the argument builtins. The 1.5.0 record types are also
+shared: the analyzer resolves declared field types and annotates field nodes,
+and the backend lowers records to literal LLVM structs with `insertvalue`
+construction, `extractvalue` reads, and guarded-pointer field writes. The backend
 carries array pointers and element counts together and checks the index range
 before every element read and indexed write. Mutable bindings store the whole
 aggregate, and

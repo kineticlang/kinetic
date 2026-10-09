@@ -46,6 +46,7 @@ class RepositoryLayoutTests(unittest.TestCase):
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
             "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
+            "13_records.kn",
         ):
             with self.subTest(example=name):
                 self.assertTrue((ROOT / "examples" / name).is_file())
@@ -54,7 +55,7 @@ class RepositoryLayoutTests(unittest.TestCase):
             "old_fn_keyword.kn", "old_let_mut.kn", "undefined_variable.kn",
             "type_mismatch.kn", "main_parameters.kn",
             "duplicate_parameters.kn",
-            "len_type.kn", "len_arity.kn",
+            "len_type.kn", "len_arity.kn", "record_field_immutable.kn",
         ):
             with self.subTest(error_example=name):
                 self.assertTrue((ROOT / "examples" / "errors" / name).is_file())
@@ -113,6 +114,7 @@ class RepositoryLayoutTests(unittest.TestCase):
         self.assertEqual(mapping, {
             "func": "FUNC", "let": "LET", "mut": "MUT",
             "while": "WHILE", "if": "IF", "else": "ELSE",
+            "record": "RECORD",
         })
 
     def test_hello_world_is_published_in_readme(self):

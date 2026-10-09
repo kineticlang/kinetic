@@ -1,0 +1,12 @@
+// This program fails to compile: field writes require a mutable binding,
+// and `point` is declared with let.
+
+record Point {
+    x: Int
+    y: Int
+}
+
+func main() {
+    let point = Point(1, 2)
+    point.x = 3
+}

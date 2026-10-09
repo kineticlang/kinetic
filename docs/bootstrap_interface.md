@@ -17,6 +17,8 @@ Kinetic 1.4.0 adds language builtins for whole-file reads and writes, program
 arguments, diagnostic output, and process exit. Those builtins trap on failure
 and return no status values; they are conveniences for current programs, not an
 implementation of the status-returning session operations specified below.
+Kinetic 1.5.0 adds record types as by-value aggregates; they are compiler-side
+data structures, not the adapter's opaque, generation-checked buffer handles.
 
 ## Examples using current features
 

@@ -27,6 +27,8 @@ class Lexer:
         r"|(?P<LBRACKET>\[)"
         r"|(?P<RBRACKET>\])"
         r"|(?P<COMMA>,)"
+        r"|(?P<DOT>\.)"
+        r"|(?P<COLON>:)"
     )
     _keywords = {
         "func": TokenKind.FUNC,
@@ -35,6 +37,7 @@ class Lexer:
         "while": TokenKind.WHILE,
         "if": TokenKind.IF,
         "else": TokenKind.ELSE,
+        "record": TokenKind.RECORD,
     }
     _removed_keywords = {
         "fn": "the 'fn' keyword was removed in 1.0.0; declare functions with 'func'",

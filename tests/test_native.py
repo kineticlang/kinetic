@@ -25,6 +25,7 @@ EXPECTED = {
     "10_text.kn": "Text operations:\n7\n75\nKin\nHello, Kinetic!\nequal\nordered\n",
     "11_indexed_writes.kn": "20\n99\n11\n100\n31\n7\n",
     "12_host_io.kn": "User arguments:\n0\n15\nkinetic file io\nDone\n",
+    "13_records.kn": "25\n52\n4\n0\n3\n2\n3\n",
 }
 
 
@@ -330,6 +331,32 @@ class NativeExampleTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "abc\n3\n")
+
+    def test_record_copies_are_independent_but_share_array_storage(self):
+        result = self._run_source(
+            "record Pair { first: Int rest: [Int] }\n"
+            "func main() {\n"
+            "  mut a = Pair(1, [7, 8])\n"
+            "  mut b = a\n"
+            "  b.first = 5\n"
+            "  print(a.first)\n"
+            "  print(b.first)\n"
+            "  mut r = b.rest\n"
+            "  r[0] = 9\n"
+            "  print(a.rest[0])\n"
+            "}"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "1\n5\n9\n")
+
+    def test_record_results_survive_calls_and_branches(self):
+        result = self._run_source(
+            "record Box { value: Int }\n"
+            "func pick(flag) { if flag > 0 { Box(1) } else { Box(2) } }\n"
+            "func main() { let b = pick(1) print(b.value) print(pick(0).value) }"
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "1\n2\n")
 
     def test_host_io_failures_trap_without_reaching_following_code(self):
         cases = {

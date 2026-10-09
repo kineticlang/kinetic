@@ -1,6 +1,6 @@
 # Kinetic examples
 
-These are complete programs for learning and experimenting with the 1.4.0 language.
+These are complete programs for learning and experimenting with the 1.5.0 language.
 
 | Program | Focus |
 | --- | --- |
@@ -16,6 +16,7 @@ These are complete programs for learning and experimenting with the 1.4.0 langua
 | [Text operations](10_text.kn) | String length, byte reads, comparisons, slicing, and concatenation. |
 | [Indexed writes](11_indexed_writes.kn) | In-place element writes through mutable bindings, visible through aliases. |
 | [Host I/O](12_host_io.kn) | Program arguments, whole-file read/write, diagnostic output, and exit status. |
+| [Records](13_records.kn) | Record declaration, positional construction, field reads, and guarded field writes. |
 
 Read the [syntax guide](../docs/syntax_guide.md) for the language rules.
 
@@ -97,6 +98,18 @@ deleted after a run. The `eprint` line goes to standard error and is not part
 of the expected standard output. Extra arguments after the source path are
 forwarded to the program, so `python kinetic.py run examples/12_host_io.kn
 alpha beta` lists `alpha` and `beta` after the argument count.
+
+Expected output for the [records example](13_records.kn):
+
+```text
+25
+52
+4
+0
+3
+2
+3
+```
 
 These are program output expectations, excluding the launcher's build/run
 messages. The hosted native CI job builds and runs every numbered example with

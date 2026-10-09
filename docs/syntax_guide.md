@@ -1,6 +1,6 @@
 # The Kinetic Syntax Guide
 
-This guide describes the 1.4.0 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
+This guide describes the 1.5.0 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
 
 Kinetic uses concise declarations and compiles through LLVM. The examples below
 show current syntax, not the proposed bootstrap host-service API.
@@ -14,6 +14,7 @@ See the [documentation index](README.md) for installation and architecture guide
 | Define a function | [`func`](../compiler/lexer.py:33) |
 | Declare an immutable binding | [`let`](../compiler/lexer.py:34) |
 | Declare a mutable binding | [`mut`](../compiler/lexer.py:35) |
+| Declare a record type | [`record`](../compiler/lexer.py:39) |
 
 Declaring a name, reassigning a value, and calling a function are separate
 operations. A mutable declaration starts directly with its own keyword.
@@ -24,7 +25,7 @@ An immutable binding gives a name to a value and cannot be reassigned. Types are
 
 ```text
 // The compiler automatically figures out `name` is a String and `age` is an Int.
-let name = "Aspyron"
+let name = "Coheret"
 let age = 5
 ```
 
@@ -36,7 +37,7 @@ counter = counter + 1 // Reassignment has no declaration keyword.
 ```
 
 Binding immutability is not a general guarantee that referenced data is deeply
-immutable or memory-safe. Version 1.4.0 supports integer-array reads and
+immutable or memory-safe. Version 1.5.0 supports integer-array reads and
 indexed writes through mutable bindings, but does not implement a production
 memory-safety model.
 
@@ -50,7 +51,7 @@ func calculate_speed(distance, time) {
 }
 ```
 
-The `main` function is the entry point of your program. In the 1.4.0 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error, and program arguments are instead available through the builtins in section 8. When you run your executable, this is where the action starts.
+The `main` function is the entry point of your program. In the 1.5.0 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error, and program arguments are instead available through the builtins in section 8. When you run your executable, this is where the action starts.
 
 ```text
 func main() {
@@ -78,7 +79,7 @@ if speed > speed_limit {
 }
 ```
 
-Comparisons in 1.4.0 are limited to equality, less-than, and greater-than. They
+Comparisons in 1.5.0 are limited to equality, less-than, and greater-than. They
 work on integers and, bytewise, on strings.
 
 ## 4. Loops (doing things repeatedly)
@@ -96,9 +97,9 @@ while i < 3 {
 
 ## 5. Arrays (lists of things)
 
-Version 1.4.0 arrays contain integers. Array literals, indexed reads, and
+Version 1.5.0 arrays contain integers. Array literals, indexed reads, and
 indexed writes through mutable bindings are supported;
-arrays of strings and mixed element types are not part of the current language.
+arrays of strings, records, and mixed element types are not part of the current language.
 
 ```text
 let high_scores = [100, 95, 80]
@@ -312,3 +313,46 @@ programs. The names `fopen`, `fclose`, `fread`, `fwrite`, `fseek`, `ftell`,
 `fprintf`, `__acrt_iob_func`, `stderr`, and `__stderrp` are reserved for the
 C runtime symbols and stream accessors the backend emits. See the
 [host-I/O example](../examples/12_host_io.kn) for a complete program.
+
+## 9. Records (grouping named fields)
+
+Since 1.5.0, a [`record`](../compiler/lexer.py:39) declaration defines a type
+with named, typed fields. Field types are `Int`, `String`, `[Int]`, or the
+name of a record declared earlier in the file; recursive and forward
+references are rejected at compile time.
+
+```text
+record Point {
+    x: Int
+    y: Int
+}
+
+func main() {
+    mut point = Point(3, 4)   // positional construction, in field order
+    print(point.x)            // field read on any record value
+    point.x = 6               // field write through a mut binding
+    print(point.x)
+}
+```
+
+- Construction is positional and must supply exactly one value per field, in
+  declaration order, with matching types.
+- Field reads work on any record-typed expression, including function results
+  (`shift(point, 1, 2).x`). Records flow through function parameters, results,
+  and conditional branches like any other value.
+- Field writes require the target to be a variable declared with
+  [`mut`](../compiler/lexer.py:35), mirroring indexed array writes; immutable
+  bindings and parameters are compile-time errors, and nested targets like
+  `make().x = 1` are rejected.
+- Records are value aggregates: assigning or passing one copies every field.
+  Scalar copies are independent, but array fields keep their existing
+  shared-storage semantics — an indexed write through a copied array field is
+  visible through every record copied from the same source.
+- Records cannot be compared, printed, indexed, or passed to `len`; those
+  operations remain limited to their existing operand types. Arrays of records
+  and variants are not part of the current language.
+
+Record names share the top-level namespace with functions and builtins, so a
+record cannot reuse a function or builtin name, and a function cannot reuse a
+record name. See the [records example](../examples/13_records.kn) for a
+complete program.

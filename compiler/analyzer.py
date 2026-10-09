@@ -5,6 +5,8 @@ from .ast import (
     CallExpr,
     Expr,
     ExpressionStatement,
+    FieldAssignStatement,
+    FieldExpr,
     Function,
     IfStatement,
     IndexAssignStatement,
@@ -19,7 +21,7 @@ from .ast import (
 )
 from .diagnostics import Diagnostics
 from .errors import CompileError
-from .types import FunctionType, KType
+from .types import FunctionType, KType, RecordType
 
 
 class TypeAnalyzer:
@@ -77,11 +79,47 @@ class TypeAnalyzer:
             "fopen", "fclose", "fread", "fwrite", "fseek", "ftell", "fprintf",
             "__acrt_iob_func", "stderr", "__stderrp",
         )
+        self.records: dict[str, list[tuple[str, KType | RecordType]]] = {}
+        for record in program.records:
+            location = record.location
+            line = location.line if location else None
+            column = location.column if location else None
+            if record.name in self.records:
+                raise CompileError(
+                    f"duplicate record definition {record.name!r}", line, column
+                )
+            if record.name in reserved_names:
+                raise CompileError(
+                    f"cannot redefine builtin {record.name!r}", line, column
+                )
+            seen_fields: set[str] = set()
+            resolved_fields: list[tuple[str, KType | RecordType]] = []
+            for field in record.fields:
+                if field.name in seen_fields:
+                    raise CompileError(
+                        f"duplicate field {field.name!r} in record {record.name!r}",
+                        line,
+                        column,
+                    )
+                seen_fields.add(field.name)
+                resolved_fields.append(
+                    (field.name, self._resolve_field_type(field.type_name, record))
+                )
+            self.records[record.name] = resolved_fields
+
         for function in program.functions:
             if function.name in reserved_names:
                 location = function.location
                 raise CompileError(
                     f"cannot redefine builtin {function.name!r}",
+                    location.line if location else None,
+                    location.column if location else None,
+                )
+            if function.name in self.records:
+                location = function.location
+                raise CompileError(
+                    f"function {function.name!r} conflicts with a record of the "
+                    "same name",
                     location.line if location else None,
                     location.column if location else None,
                 )
@@ -153,13 +191,31 @@ class TypeAnalyzer:
             return None, None
         return location.line, location.column
 
+    def _resolve_field_type(
+        self, type_name: str, record
+    ) -> KType | RecordType:
+        if type_name == "Int":
+            return KType.INT
+        if type_name == "String":
+            return KType.STRING
+        if type_name == "[Int]":
+            return KType.INT_ARRAY
+        if type_name in self.records:
+            return RecordType(type_name)
+        location = record.location
+        raise CompileError(
+            f"unknown type {type_name!r} for a field in record {record.name!r}",
+            location.line if location else None,
+            location.column if location else None,
+        )
+
     @staticmethod
-    def _unify(old: KType, new: KType, context: str) -> KType:
+    def _unify(old, new, context: str):
         if new is KType.UNKNOWN:
             return old
         if old is KType.UNKNOWN:
             return new
-        if old is not new:
+        if old != new:
             raise CompileError(f"type mismatch in {context}: {old.name} vs {new.name}")
         return old
 
@@ -372,6 +428,54 @@ class TypeAnalyzer:
                     )
                 last_type = KType.VOID
 
+            elif isinstance(statement, FieldAssignStatement):
+                line, column = self._location_of(statement)
+                target = statement.target
+                if not isinstance(target, NameExpr):
+                    raise CompileError(
+                        "field assignment expects a variable", line, column
+                    )
+                if target.name not in environment:
+                    raise CompileError(
+                        f"undefined variable {target.name!r}", line, column
+                    )
+                if target.name not in mutables:
+                    raise CompileError(
+                        f"cannot modify immutable variable {target.name!r}",
+                        line,
+                        column,
+                    )
+                binding_id = self._binding_ids.get(target.name)
+                if binding_id is not None:
+                    used.add(binding_id)
+                target_type = self._expr_type(target, environment, used)
+                if not isinstance(target_type, RecordType):
+                    raise CompileError(
+                        f"field assignment expects a record, found "
+                        f"{target_type.name}",
+                        line,
+                        column,
+                    )
+                field_types = dict(self.records[target_type.name])
+                if statement.field not in field_types:
+                    raise CompileError(
+                        f"record {target_type.name!r} has no field "
+                        f"{statement.field!r}",
+                        line,
+                        column,
+                    )
+                value_type = self._expr_type(statement.value, environment, used)
+                self._unify(
+                    value_type,
+                    field_types[statement.field],
+                    f"field {statement.field!r} of {target_type.name!r}",
+                )
+                self._constrain_name(
+                    statement.value, field_types[statement.field], environment
+                )
+                statement.resolved = target_type
+                last_type = KType.VOID
+
             elif isinstance(statement, WhileStatement):
                 cond_type = self._expr_type(statement.condition, environment, used)
                 self._constrain_name(statement.condition, KType.BOOL, environment)
@@ -493,6 +597,36 @@ class TypeAnalyzer:
                     expression.collection.name, expression.index, expression
                 )
             return KType.INT
+        if isinstance(expression, FieldExpr):
+            target_type = self._expr_type(expression.target, environment, used)
+            if target_type is KType.UNKNOWN:
+                if not self._final_validation:
+                    return KType.UNKNOWN
+                line, column = self._location_of(expression)
+                raise CompileError(
+                    f"could not infer a record type for field "
+                    f"{expression.field!r}",
+                    line,
+                    column,
+                )
+            line, column = self._location_of(expression)
+            if not isinstance(target_type, RecordType):
+                raise CompileError(
+                    f"field access expects a record, found {target_type.name}",
+                    line,
+                    column,
+                )
+            fields = self.records[target_type.name]
+            field_types = dict(fields)
+            if expression.field not in field_types:
+                raise CompileError(
+                    f"record {target_type.name!r} has no field "
+                    f"{expression.field!r}",
+                    line,
+                    column,
+                )
+            expression.resolved = target_type
+            return field_types[expression.field]
         if isinstance(expression, BinaryExpr):
             return self._binary_type(expression, environment, used)
         if isinstance(expression, CallExpr):
@@ -651,6 +785,26 @@ class TypeAnalyzer:
                     "print expects one integer or string argument", line, column
                 )
             return KType.VOID
+        if expression.callee in self.records:
+            fields = self.records[expression.callee]
+            if len(argument_types) != len(fields):
+                line, column = self._location_of(expression)
+                raise CompileError(
+                    f"record {expression.callee!r} expects {len(fields)} "
+                    "field values",
+                    line,
+                    column,
+                )
+            for argument, argument_type, (field_name, field_type) in zip(
+                expression.arguments, argument_types, fields
+            ):
+                self._unify(
+                    argument_type,
+                    field_type,
+                    f"field {field_name!r} of {expression.callee!r}",
+                )
+                self._constrain_name(argument, field_type, environment)
+            return RecordType(expression.callee)
         if expression.callee not in self.types:
             line, column = self._location_of(expression)
             raise CompileError(

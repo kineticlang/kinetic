@@ -9,6 +9,7 @@ class TokenKind(Enum):
     WHILE = auto()
     IF = auto()
     ELSE = auto()
+    RECORD = auto()
     IDENT = auto()
     NUMBER = auto()
     STRING = auto()
@@ -27,6 +28,8 @@ class TokenKind(Enum):
     LBRACKET = auto()
     RBRACKET = auto()
     COMMA = auto()
+    DOT = auto()
+    COLON = auto()
     EOF = auto()
 
 

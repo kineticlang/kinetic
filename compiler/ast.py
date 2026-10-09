@@ -53,6 +53,14 @@ class IndexExpr(Expr):
     index: Expr | None = None
 
 
+@dataclass
+class FieldExpr(Expr):
+    location: SourceLocation | None = None
+    target: Expr | None = None
+    field: str = ""
+    resolved: object | None = None
+
+
 class Statement:
     location: SourceLocation | None
 
@@ -78,6 +86,15 @@ class IndexAssignStatement(Statement):
     collection: Expr | None = None
     index: Expr | None = None
     value: Expr | None = None
+
+
+@dataclass
+class FieldAssignStatement(Statement):
+    location: SourceLocation | None = None
+    target: Expr | None = None
+    field: str = ""
+    value: Expr | None = None
+    resolved: object | None = None
 
 
 @dataclass
@@ -110,5 +127,19 @@ class Function:
 
 
 @dataclass
+class RecordField:
+    name: str
+    type_name: str
+
+
+@dataclass
+class RecordDecl:
+    name: str
+    fields: list[RecordField]
+    location: SourceLocation | None = None
+
+
+@dataclass
 class Program:
     functions: list[Function]
+    records: list[RecordDecl] = field(default_factory=list)

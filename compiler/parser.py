@@ -5,6 +5,8 @@ from .ast import (
     CallExpr,
     Expr,
     ExpressionStatement,
+    FieldAssignStatement,
+    FieldExpr,
     Function,
     IfStatement,
     IndexAssignStatement,
@@ -13,6 +15,8 @@ from .ast import (
     NameExpr,
     NumberExpr,
     Program,
+    RecordDecl,
+    RecordField,
     Statement,
     StringExpr,
     WhileStatement,
@@ -33,9 +37,13 @@ class Parser:
 
     def parse(self) -> Program:
         functions: list[Function] = []
+        records: list[RecordDecl] = []
         while self.current.kind is not TokenKind.EOF:
-            functions.append(self._parse_function())
-        return Program(functions)
+            if self.current.kind is TokenKind.RECORD:
+                records.append(self._parse_record())
+            else:
+                functions.append(self._parse_function())
+        return Program(functions, records)
 
     def _location(self, token: Token | None = None) -> SourceLocation:
         current = token if token is not None else self.current
@@ -56,6 +64,38 @@ class Parser:
         if self.current.kind is kind:
             return self._advance()
         return None
+
+    def _parse_record(self) -> RecordDecl:
+        keyword = self._advance()
+        name = self._expect(
+            TokenKind.IDENT, "expected a record name after 'record'"
+        ).value
+        self._expect(TokenKind.LBRACE, "expected '{' after the record name")
+        fields: list[RecordField] = []
+        while self.current.kind is not TokenKind.RBRACE:
+            if self.current.kind is TokenKind.EOF:
+                token = self.current
+                raise ParseError("unclosed block", token.line, token.column)
+            field_name = self._expect(
+                TokenKind.IDENT, "expected a field name in the record body"
+            ).value
+            self._expect(TokenKind.COLON, "expected ':' after the field name")
+            fields.append(RecordField(field_name, self._parse_field_type()))
+        self._advance()
+        if not fields:
+            raise ParseError(
+                f"record {name!r} declares no fields", keyword.line, keyword.column
+            )
+        return RecordDecl(name, fields, self._location(keyword))
+
+    def _parse_field_type(self) -> str:
+        if self._match(TokenKind.LBRACKET) is not None:
+            element = self._expect(
+                TokenKind.IDENT, "expected an element type after '['"
+            ).value
+            self._expect(TokenKind.RBRACKET, "expected ']' after the element type")
+            return "[" + element + "]"
+        return self._expect(TokenKind.IDENT, "expected a field type").value
 
     def _parse_function(self) -> Function:
         keyword = self._expect(TokenKind.FUNC, "expected 'func' to start a function")
@@ -151,6 +191,14 @@ class Parser:
                 expression.index,
                 self._parse_expression(),
             )
+        if isinstance(expression, FieldExpr) and self.current.kind is TokenKind.EQUAL:
+            self._advance()
+            return FieldAssignStatement(
+                expression.location,
+                expression.target,
+                expression.field,
+                self._parse_expression(),
+            )
         return ExpressionStatement(expression.location, expression)
 
     def _parse_expression(self) -> Expr:
@@ -221,6 +269,11 @@ class Parser:
                 index = self._parse_expression()
                 self._expect(TokenKind.RBRACKET, "expected ']' after the index")
                 expression = IndexExpr(self._location(token), expression, index)
+            elif (token := self._match(TokenKind.DOT)) is not None:
+                field = self._expect(
+                    TokenKind.IDENT, "expected a field name after '.'"
+                ).value
+                expression = FieldExpr(self._location(token), expression, field)
             else:
                 break
         return expression

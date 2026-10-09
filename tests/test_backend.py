@@ -366,6 +366,50 @@ class BackendTests(unittest.TestCase):
         self.assertIn("trunc i64 3 to i32", llvm_ir)
         self.assertIn('call void @"exit"', llvm_ir)
 
+    def test_record_construction_builds_an_aggregate(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source(
+            "record Point { x: Int y: Int }\n"
+            "func main() { let p = Point(3, 4) print(p.x) }"
+        )
+        self.assertIn("insertvalue {i64, i64} undef, i64 3, 0", llvm_ir)
+        self.assertIn("insertvalue {i64, i64}", llvm_ir)
+        self.assertIn("extractvalue {i64, i64}", llvm_ir)
+
+    def test_record_field_write_stores_through_the_binding_pointer(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source(
+            "record Point { x: Int y: Int }\n"
+            "func main() { mut p = Point(1, 2) p.y = 9 print(p.y) }"
+        )
+        self.assertIn("alloca {i64, i64}", llvm_ir)
+        self.assertIn("getelementptr {i64, i64}, {i64, i64}*", llvm_ir)
+        self.assertIn("store i64 9", llvm_ir)
+
+    def test_record_types_flow_through_function_signatures(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source(
+            "record Box { value: Int }\n"
+            "func make() { Box(7) }\n"
+            "func main() { print(make().value) }"
+        )
+        self.assertIn('define {i64} @"make"()', llvm_ir)
+        self.assertIn('call {i64} @"make"', llvm_ir)
+        self.assertIn("extractvalue {i64}", llvm_ir)
+
+    def test_record_fields_support_strings_arrays_and_records(self):
+        from compiler.compiler import compile_source
+
+        llvm_ir = compile_source(
+            "record Token { kind: Int text: String }\n"
+            "record Lexer { tokens: [Int] first: Token }\n"
+            'func main() { let lx = Lexer([1], Token(1, "a")) print(lx.first.kind) }'
+        )
+        self.assertIn("{{i64*, i64}, {i64, i8*}}", llvm_ir)
+
 
 if __name__ == "__main__":
     unittest.main()

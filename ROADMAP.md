@@ -5,7 +5,7 @@
 Kinetic's next major destination is **self-hosting**: a compiler written in
 Kinetic that can compile its own source and build a working successor compiler.
 
-The current compiler is a Python 1.4.0 prototype. It is not self-hosting, and no
+The current compiler is a Python 1.5.0 prototype. It is not self-hosting, and no
 compiler stage has been ported to Kinetic yet. The language and runtime need
 additional capabilities before that port is practical.
 
@@ -119,8 +119,15 @@ observed local or hosted results, not from configuration or written tests alone.
 
 - [x] Source-text operations: lengths, byte access, comparison, slicing, and
   construction of output strings.
-- [ ] Data structures suitable for compiler records and variants, growable
-  buffers, and symbol lookup; choose the minimum useful design before adding features.
+- [ ] Record types, the chosen minimum useful data-structure design.
+  Implemented in 1.5.0: records declare named, typed fields (`Int`, `String`,
+  `[Int]`, or an earlier record), construct positionally, read fields on any
+  record value, and write fields only through `mut` bindings. They lower to
+  LLVM value aggregates with no allocation; copies duplicate scalar fields
+  while array fields keep their shared-storage semantics. Marked complete once
+  the hosted behavioral and native CI jobs pass on the implementation.
+- [ ] Variants, growable buffers, and symbol lookup on top of the record
+  design; recursive record references are still rejected.
 - [x] Mutable indexed storage: indexed assignment on mutable integer-array
   bindings (1.3.0), with compile-time constant-bounds errors and the same
   runtime guard as reads. Copies share element storage, so aliases observe
@@ -133,15 +140,16 @@ observed local or hosted results, not from configuration or written tests alone.
   allocation-failure regression coverage remains.
 - [ ] Defined allocation and lifetime rules for compiler-owned data, with checks
   appropriate to the chosen design.
-- [x] File input/output, command-line arguments, diagnostics, and error/status
-  reporting (1.4.0): the `read_file`, `write_file`, `arg_count`, `arg`,
-  `eprint`, and `exit` builtins lower to C library calls. Generated `main`
-  functions capture `argc`/`argv`; `arg` reads are bounds-guarded, file
+- [ ] File input/output, command-line arguments, diagnostics, and error/status
+  reporting. Implemented in 1.4.0: the `read_file`, `write_file`, `arg_count`,
+  `arg`, `eprint`, and `exit` builtins lower to C library calls. Generated
+  `main` functions capture `argc`/`argv`; `arg` reads are bounds-guarded, file
   failures trap, `eprint` writes to standard error, and the CLI's run command
   forwards trailing program arguments and propagates exit statuses. These are
   trap-on-failure language builtins, not the status-returning host adapter in
   the [bootstrap interface](docs/bootstrap_interface.md); they do not provide
-  streaming, partial reads, or directory operations.
+  streaming, partial reads, or directory operations. Marked complete once the
+  hosted behavioral and native CI jobs pass on the implementation.
 - [ ] Multi-file organization and a way to resolve compiler modules.
 - [x] A documented interface to native services and the LLVM/Clang toolchain
   that does not require Python-specific llvmlite APIs inside Kinetic code
@@ -191,4 +199,7 @@ the entire native toolchain in Kinetic.
 - [ ] Maintain a reproducible bootstrap path as the language evolves.
 
 Update this document when implementation and verification change a milestone's
-status. Do not treat a planned capability as part of the current language.
+status. An item is checked complete only after its implementation has passed
+the hosted behavioral and native CI jobs; landed-but-unverified work is
+described as implemented with verification pending. Do not treat a planned
+capability as part of the current language.

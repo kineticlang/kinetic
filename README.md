@@ -4,7 +4,7 @@ A small language compiler, written in Python and targeting LLVM.
 
 [Language guide](docs/syntax_guide.md) · [Architecture](docs/architecture.md) · [Installation](INSTALL.md) · [Contributing](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
 
-Kinetic is an early compiler prototype (1.4.0). It reads Kinetic source, performs
+Kinetic is an early compiler prototype (1.5.0). It reads Kinetic source, performs
 lexical, syntactic, and type analysis, emits verified textual LLVM IR through
 llvmlite, and uses Clang to produce a native executable.
 
@@ -23,6 +23,7 @@ memory-safety model.
 - String length, byte reads, bytewise comparisons, slicing, and concatenation.
 - A built-in printing operation for one integer or string at a time.
 - Host I/O builtins for files, program arguments, diagnostic output, and exit status.
+- Record types with named fields, positional construction, and guarded field writes.
 
 Start with the [language guide](docs/syntax_guide.md) and the programs in
 [examples](examples/README.md).
@@ -77,7 +78,7 @@ one clear location.
 | --- | --- |
 | [Compiler](compiler/README.md) | A flat Python package containing all compiler stages and the CLI. |
 | [Documentation](docs/README.md) | Language reference, architecture, and repository design. |
-| [Examples](examples/README.md) | Twelve numbered programs plus compile-time error, runtime-failure, and warning examples for 1.4.0. |
+| [Examples](examples/README.md) | Thirteen numbered programs plus compile-time error, runtime-failure, and warning examples for 1.5.0. |
 | [Tools](tools/README.md) | Repository maintenance utilities, separate from the compiler CLI. |
 | [Tests](tests/README.md) | Separate layout, frontend, backend, and opt-in native suites. |
 | [Package configuration](pyproject.toml) | Python packaging and the optional installed command. |
@@ -103,10 +104,21 @@ requests, and manual dispatches. Its Windows/Linux matrix runs the general
 runner on Python 3.10 and 3.14 without installing llvmlite. A separate Ubuntu
 Python 3.10 job installs the runtime dependency and runs frontend/backend tests.
 A third Ubuntu job enables native testing and uses the runner-provided Clang
-toolchain to build and execute all twelve numbered examples plus the
+toolchain to build and execute all thirteen numbered examples plus the
 runtime-failure programs. A passing native job verifies the covered end-to-end
 behavior for that revision; configuration alone is not evidence of success. See
 [contributing](CONTRIBUTING.md).
+
+### New in 1.5.0
+
+Record types: `record Point { x: Int  y: Int }` declares named, typed fields
+(`Int`, `String`, `[Int]`, or an earlier record). Construction is positional
+(`Point(3, 4)`), field reads work on any record value (`point.x`), and field
+writes require a `mut` binding (`point.x = 6`). Records are value aggregates
+lowered to LLVM structs with no allocation; copies duplicate scalar fields,
+while array fields keep their shared-storage semantics. Recursive or forward
+field references are rejected. The [records example](examples/13_records.kn)
+demonstrates construction, reads, writes, and records crossing function calls.
 
 ### New in 1.4.0
 
@@ -174,7 +186,7 @@ the native suites on every push. The
 ## Direction
 
 The current goal is to build the foundations needed for a compiler written in
-Kinetic that can compile itself. Version 1.4.0 is not self-hosting yet. The
+Kinetic that can compile itself. Version 1.5.0 is not self-hosting yet. The
 [roadmap](ROADMAP.md) separates completed work, current planning, and future milestones.
 
 ## License

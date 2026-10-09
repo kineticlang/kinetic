@@ -805,6 +805,188 @@ class HostBuiltinTests(unittest.TestCase):
                 )
 
 
+class RecordTests(unittest.TestCase):
+    def test_record_declaration_parses_fields(self):
+        program = parse(
+            "record Point {\n x: Int\n y: Int\n}\nfunc main() { print(0) }"
+        )
+        record = program.records[0]
+        self.assertEqual(record.name, "Point")
+        self.assertEqual(
+            [(field.name, field.type_name) for field in record.fields],
+            [("x", "Int"), ("y", "Int")],
+        )
+
+    def test_empty_record_is_rejected(self):
+        with self.assertRaises(ParseError) as raised:
+            parse("record Empty {\n}\nfunc main() { print(0) }")
+        self.assertIn("declares no fields", str(raised.exception))
+
+    def test_record_construction_types_fields_and_result(self):
+        types, _ = analyze(
+            "record Point { x: Int y: Int }\n"
+            "func make() { Point(3, 4) }\n"
+            "func main() { let p = make() print(p.x) }"
+        )
+        self.assertEqual(types["make"].result.name, "Point")
+
+    def test_field_reads_infer_parameter_and_result_types(self):
+        types, _ = analyze(
+            "record Point { x: Int y: Int }\n"
+            "func get_x(point) { point.x }\n"
+            "func main() { print(get_x(Point(3, 4))) }"
+        )
+        self.assertEqual(types["get_x"].parameters[0].name, "Point")
+        self.assertEqual(types["get_x"].result.name, "INT")
+
+    def test_field_write_through_mutable_binding_is_accepted(self):
+        types, _ = analyze(
+            "record Point { x: Int y: Int }\n"
+            "func main() { mut p = Point(1, 2) p.x = 9 print(p.x) }"
+        )
+        self.assertIn("main", types)
+
+    def test_field_write_rejects_immutable_binding(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze(
+                "record Point { x: Int y: Int }\n"
+                "func main() { let p = Point(1, 2) p.x = 9 }"
+            )
+        self.assertIn("cannot modify immutable variable 'p'", str(raised.exception))
+
+    def test_field_write_rejects_parameter(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze(
+                "record Point { x: Int y: Int }\n"
+                "func move(point) { point.x = 9 }\n"
+                "func main() { move(Point(1, 2)) }"
+            )
+        self.assertIn(
+            "cannot modify immutable variable 'point'", str(raised.exception)
+        )
+
+    def test_field_write_requires_a_variable_target(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze(
+                "record Point { x: Int y: Int }\n"
+                "func make() { Point(1, 2) }\n"
+                "func main() { make().x = 9 }"
+            )
+        self.assertIn("field assignment expects a variable", str(raised.exception))
+
+    def test_unknown_fields_are_rejected(self):
+        for statement in ("print(p.z)", "mut q = p q.z = 1"):
+            with self.subTest(statement=statement):
+                with self.assertRaises(CompileError) as raised:
+                    analyze(
+                        "record Point { x: Int y: Int }\n"
+                        "func main() { let p = Point(1, 2) " + statement + " }"
+                    )
+                self.assertIn(
+                    "record 'Point' has no field 'z'", str(raised.exception)
+                )
+
+    def test_construction_arity_and_type_errors(self):
+        cases = {
+            "Point(1)": "record 'Point' expects 2 field values",
+            'Point(1, "a")': "type mismatch in field 'y' of 'Point'",
+        }
+        for expression, expected in cases.items():
+            with self.subTest(expression=expression):
+                with self.assertRaises(CompileError) as raised:
+                    analyze(
+                        "record Point { x: Int y: Int }\n"
+                        "func main() { let p = " + expression + " print(p.x) }"
+                    )
+                self.assertIn(expected, str(raised.exception))
+
+    def test_field_access_on_non_record_is_rejected(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze("func main() { let x = 1 print(x.y) }")
+        self.assertIn("field access expects a record, found INT", str(raised.exception))
+
+    def test_uninferrable_field_access_is_rejected(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze(
+                "record Point { x: Int }\n"
+                "func orphan(point) { point.x }\n"
+                "func main() { print(0) }"
+            )
+        self.assertIn("could not infer a record type for field 'x'", str(raised.exception))
+
+    def test_duplicate_record_and_field_are_rejected(self):
+        sources = (
+            (
+                "record A { x: Int }\nrecord A { y: Int }\nfunc main() { print(0) }",
+                "duplicate record definition 'A'",
+            ),
+            (
+                "record A { x: Int x: Int }\nfunc main() { print(0) }",
+                "duplicate field 'x' in record 'A'",
+            ),
+        )
+        for source, expected in sources:
+            with self.subTest(expected=expected):
+                with self.assertRaises(CompileError) as raised:
+                    analyze(source)
+                self.assertIn(expected, str(raised.exception))
+
+    def test_unknown_forward_and_self_field_types_are_rejected(self):
+        sources = (
+            "record A { x: Bogus }\nfunc main() { print(0) }",
+            "record A { next: B }\nrecord B { v: Int }\nfunc main() { print(0) }",
+            "record A { next: A }\nfunc main() { print(0) }",
+        )
+        for source in sources:
+            with self.subTest(source=source):
+                with self.assertRaises(CompileError) as raised:
+                    analyze(source)
+                self.assertIn("unknown type", str(raised.exception))
+
+    def test_record_and_function_name_clash_is_rejected(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze(
+                "record f { x: Int }\nfunc f() { 1 }\nfunc main() { print(0) }"
+            )
+        self.assertIn("conflicts with a record", str(raised.exception))
+
+    def test_record_name_cannot_redefine_builtin(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze("record len { x: Int }\nfunc main() { print(0) }")
+        self.assertIn("cannot redefine builtin 'len'", str(raised.exception))
+
+    def test_record_fields_support_strings_arrays_and_records(self):
+        types, _ = analyze(
+            "record Token { kind: Int text: String }\n"
+            "record Lexer { tokens: [Int] first: Token }\n"
+            'func main() { let lx = Lexer([1, 2], Token(1, "a"))\n'
+            "  print(lx.first.kind) print(lx.tokens[1]) print(lx.first.text) }"
+        )
+        self.assertIn("main", types)
+
+    def test_record_result_unifies_across_branches(self):
+        types, _ = analyze(
+            "record Box { value: Int }\n"
+            "func pick(flag) { if flag > 0 { Box(1) } else { Box(2) } }\n"
+            "func main() { print(pick(1).value) }"
+        )
+        self.assertEqual(types["pick"].result.name, "Box")
+
+    def test_record_comparison_and_print_are_rejected(self):
+        cases = {
+            "print(Point(1, 2))": "print expects one integer or string argument",
+            "if Point(1, 2) == Point(1, 2) { print(1) }": "requires integers",
+        }
+        for statement, expected in cases.items():
+            with self.subTest(statement=statement):
+                with self.assertRaises(CompileError) as raised:
+                    analyze(
+                        "record Point { x: Int y: Int }\n"
+                        "func main() { " + statement + " }"
+                    )
+                self.assertIn(expected, str(raised.exception))
+
+
 class RunExitStatusTests(unittest.TestCase):
     def test_run_preserves_failure_status(self):
         from contextlib import redirect_stdout
@@ -836,6 +1018,7 @@ class DiagnosticExampleTests(unittest.TestCase):
         "type_mismatch.kn": "",
         "main_parameters.kn": "cannot have parameters",
         "duplicate_parameters.kn": "duplicate parameter",
+        "record_field_immutable.kn": "cannot modify immutable variable",
     }
 
     def test_error_examples_fail_with_expected_diagnostic(self):
@@ -875,6 +1058,7 @@ class DiagnosticExampleTests(unittest.TestCase):
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
             "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
+            "13_records.kn",
         ):
             with self.subTest(example=name):
                 text = Path("examples", name).read_text(encoding="utf-8")

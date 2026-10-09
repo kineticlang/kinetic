@@ -8,7 +8,7 @@ stages over adding infrastructure intended for a much larger language project.
 - [Installation](INSTALL.md) covers the source-checkout and editable-install workflows.
 - [Architecture](docs/architecture.md) explains the compilation pipeline.
 - [Repository layout](docs/repository_layout.md) explains where changes belong.
-- [Language guide](docs/syntax_guide.md) documents the existing 1.4.0 surface.
+- [Language guide](docs/syntax_guide.md) documents the existing 1.5.0 surface.
 - [Bootstrap host interface](docs/bootstrap_interface.md) defines a future interface, not available builtins.
 - [Roadmap](ROADMAP.md) tracks implemented features and the path toward self-hosting.
 
@@ -109,6 +109,8 @@ python kinetic.py run examples/08_array_lengths.kn
 python kinetic.py run examples/09_array_lifetimes.kn
 python kinetic.py run examples/10_text.kn
 python kinetic.py run examples/11_indexed_writes.kn
+python kinetic.py run examples/12_host_io.kn
+python kinetic.py run examples/13_records.kn
 ```
 
 These commands **do compile and execute programs**. Do not use them when a task

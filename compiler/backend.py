@@ -7,6 +7,8 @@ from .ast import (
     CallExpr,
     Expr,
     ExpressionStatement,
+    FieldAssignStatement,
+    FieldExpr,
     Function,
     IfStatement,
     IndexAssignStatement,
@@ -20,7 +22,7 @@ from .ast import (
     WhileStatement,
 )
 from .errors import CompileError
-from .types import FunctionType, KType
+from .types import FunctionType, KType, RecordType
 
 
 class LLVMBackend:
@@ -36,6 +38,15 @@ class LLVMBackend:
         self.array_type = ir.LiteralStructType([self.i64.as_pointer(), self.i64])
         self.functions: dict[str, ir.Function] = {}
         self.string_counter = 0
+        self.record_structs: dict[str, ir.LiteralStructType] = {}
+        self.record_fields: dict[str, list[str]] = {}
+        for record in program.records:
+            self.record_fields[record.name] = [
+                field.name for field in record.fields
+            ]
+            self.record_structs[record.name] = ir.LiteralStructType(
+                [self._field_llvm_type(field.type_name) for field in record.fields]
+            )
 
         printf_type = ir.FunctionType(self.i32, [self.ptr], var_arg=True)
         self.printf = ir.Function(self.module, printf_type, name="printf")
@@ -46,7 +57,20 @@ class LLVMBackend:
             self._emit_function(function)
         return str(self.module)
 
-    def _llvm_type(self, kind: KType) -> ir.Type:
+    def _field_llvm_type(self, type_name: str) -> ir.Type:
+        if type_name == "Int":
+            return self.i64
+        if type_name == "String":
+            return self.ptr
+        if type_name == "[Int]":
+            return self.array_type
+        if type_name in self.record_structs:
+            return self.record_structs[type_name]
+        raise CompileError(f"Unknown record field type {type_name!r}")
+
+    def _llvm_type(self, kind) -> ir.Type:
+        if isinstance(kind, RecordType):
+            return self.record_structs[kind.name]
         if kind is KType.INT:
             return self.i64
         if kind is KType.STRING:
@@ -141,6 +165,25 @@ class LLVMBackend:
                 self._emit_index_guard(builder, index, length)
                 elem_ptr = builder.gep(data, [index], name="elem_ptr")
                 builder.store(value, elem_ptr)
+                last_value = None
+
+            elif isinstance(statement, FieldAssignStatement):
+                value = self._require_value(
+                    self._emit_expr(statement.value, builder, env, muts)
+                )
+                record_type = statement.resolved
+                if record_type is None:
+                    raise CompileError(
+                        "An unresolved record field reached the LLVM backend"
+                    )
+                index = self.record_fields[record_type.name].index(statement.field)
+                target_ptr = env[statement.target.name]
+                field_ptr = builder.gep(
+                    target_ptr,
+                    [ir.Constant(self.i32, 0), ir.Constant(self.i32, index)],
+                    name="field.ptr",
+                )
+                builder.store(value, field_ptr)
                 last_value = None
 
             elif isinstance(statement, WhileStatement):
@@ -262,6 +305,19 @@ class LLVMBackend:
             self._emit_index_guard(builder, index, length)
             elem_ptr = builder.gep(data, [index], name="elem_ptr")
             return builder.load(elem_ptr, name="elem")
+        if isinstance(expression, FieldExpr):
+            target = self._require_value(
+                self._emit_expr(expression.target, builder, environment, mutables)
+            )
+            record_type = expression.resolved
+            if record_type is None:
+                raise CompileError(
+                    "An unresolved record field reached the LLVM backend"
+                )
+            index = self.record_fields[record_type.name].index(expression.field)
+            return builder.extract_value(
+                target, index, name="record." + expression.field
+            )
         if isinstance(expression, BinaryExpr):
             return self._emit_binary(expression, builder, environment, mutables)
         if isinstance(expression, CallExpr):
@@ -656,6 +712,14 @@ class LLVMBackend:
         if expression.callee == "print":
             self._emit_print(arguments[0], builder)
             return None
+        if expression.callee in self.record_structs:
+            struct_type = self.record_structs[expression.callee]
+            aggregate = ir.Constant(struct_type, ir.Undefined)
+            for index, argument in enumerate(arguments):
+                aggregate = builder.insert_value(
+                    aggregate, argument, index, name="record.build"
+                )
+            return aggregate
         return builder.call(
             self.functions[expression.callee], arguments, name="call"
         )
