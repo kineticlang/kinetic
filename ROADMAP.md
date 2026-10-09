@@ -119,13 +119,13 @@ observed local or hosted results, not from configuration or written tests alone.
 
 - [x] Source-text operations: lengths, byte access, comparison, slicing, and
   construction of output strings.
-- [ ] Record types, the chosen minimum useful data-structure design.
-  Implemented in 1.5.0: records declare named, typed fields (`Int`, `String`,
-  `[Int]`, or an earlier record), construct positionally, read fields on any
-  record value, and write fields only through `mut` bindings. They lower to
-  LLVM value aggregates with no allocation; copies duplicate scalar fields
-  while array fields keep their shared-storage semantics. Marked complete once
-  the hosted behavioral and native CI jobs pass on the implementation.
+- [x] Record types (1.5.0), the chosen minimum useful data-structure design:
+  records declare named, typed fields (`Int`, `String`, `[Int]`, or an
+  earlier record), construct positionally, read fields on any record value,
+  and write fields only through `mut` bindings. They lower to LLVM value
+  aggregates with no allocation; copies duplicate scalar fields while array
+  fields keep their shared-storage semantics. Verified by the hosted
+  behavioral and native CI jobs.
 - [ ] Variants, growable buffers, and symbol lookup on top of the record
   design; recursive record references are still rejected.
 - [x] Mutable indexed storage: indexed assignment on mutable integer-array
@@ -140,16 +140,16 @@ observed local or hosted results, not from configuration or written tests alone.
   allocation-failure regression coverage remains.
 - [ ] Defined allocation and lifetime rules for compiler-owned data, with checks
   appropriate to the chosen design.
-- [ ] File input/output, command-line arguments, diagnostics, and error/status
-  reporting. Implemented in 1.4.0: the `read_file`, `write_file`, `arg_count`,
-  `arg`, `eprint`, and `exit` builtins lower to C library calls. Generated
-  `main` functions capture `argc`/`argv`; `arg` reads are bounds-guarded, file
+- [x] File input/output, command-line arguments, diagnostics, and error/status
+  reporting (1.4.0): the `read_file`, `write_file`, `arg_count`, `arg`,
+  `eprint`, and `exit` builtins lower to C library calls. Generated `main`
+  functions capture `argc`/`argv`; `arg` reads are bounds-guarded, file
   failures trap, `eprint` writes to standard error, and the CLI's run command
   forwards trailing program arguments and propagates exit statuses. These are
   trap-on-failure language builtins, not the status-returning host adapter in
   the [bootstrap interface](docs/bootstrap_interface.md); they do not provide
-  streaming, partial reads, or directory operations. Marked complete once the
-  hosted behavioral and native CI jobs pass on the implementation.
+  streaming, partial reads, or directory operations. Verified by the hosted
+  behavioral and native CI jobs.
 - [ ] Multi-file organization and a way to resolve compiler modules.
 - [x] A documented interface to native services and the LLVM/Clang toolchain
   that does not require Python-specific llvmlite APIs inside Kinetic code
