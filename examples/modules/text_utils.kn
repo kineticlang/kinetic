@@ -1,0 +1,24 @@
+// A module holds declarations for other Kinetic files. Modules may declare
+// functions and records, but not a 'main' entry point.
+
+func is_digit(byte) {
+    if byte > 47 {
+        if byte < 58 { 1 } else { 0 }
+    } else {
+        0
+    }
+}
+
+func count_digits(text) {
+    mut index = 0
+    mut total = 0
+
+    while index < len(text) {
+        if is_digit(text[index]) == 1 {
+            total = total + 1
+        }
+        index = index + 1
+    }
+
+    total
+}

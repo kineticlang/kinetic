@@ -27,6 +27,7 @@ EXPECTED = {
     "11_indexed_writes.kn": "20\n99\n11\n100\n31\n7\n",
     "12_host_io.kn": "User arguments:\n0\n15\nkinetic file io\nDone\n",
     "13_records.kn": "25\n52\n4\n0\n3\n2\n3\n",
+    "14_modules.kn": "5\n0\n11\n",
 }
 
 
@@ -42,7 +43,9 @@ class NativeExampleTests(unittest.TestCase):
                 with tempfile.TemporaryDirectory() as directory:
                     work = Path(directory) / name
                     work.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-                    llvm_ir = compile_source(work.read_text(encoding="utf-8"))
+                    llvm_ir = compile_source(
+                        source.read_text(encoding="utf-8"), source
+                    )
                     ll_file = work.with_suffix(".ll")
                     ll_file.write_text(llvm_ir, encoding="utf-8")
                     binary = work.with_suffix(
@@ -59,13 +62,15 @@ class NativeExampleTests(unittest.TestCase):
                     )
                     self.assertIn(expected_output, result.stdout)
 
-    def _run_source(self, source, args=()):
+    def _run_source(self, source, args=(), source_path=None):
         from compiler.compiler import compile_source
 
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)
             ir_path = work / "program.ll"
-            ir_path.write_text(compile_source(source), encoding="utf-8")
+            ir_path.write_text(
+                compile_source(source, source_path), encoding="utf-8"
+            )
             binary = work / ("program.exe" if sys.platform == "win32" else "program")
             subprocess.run(
                 [CLANG, str(ir_path), "-o", str(binary)],
@@ -293,6 +298,50 @@ class NativeExampleTests(unittest.TestCase):
                 )
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("Unreachable", result.stdout)
+
+    def test_imported_module_program_builds_and_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module = root / "lib" / "digits.kn"
+            module.parent.mkdir(parents=True)
+            module.write_text(
+                "func is_digit(byte) {\n"
+                "    if byte > 47 {\n"
+                "        if byte < 58 { 1 } else { 0 }\n"
+                "    } else {\n"
+                "        0\n"
+                "    }\n"
+                "}\n"
+                "\n"
+                "func count_digits(text) {\n"
+                "    mut index = 0\n"
+                "    mut total = 0\n"
+                "    while index < len(text) {\n"
+                "        if is_digit(text[index]) == 1 {\n"
+                "            total = total + 1\n"
+                "        }\n"
+                "        index = index + 1\n"
+                "    }\n"
+                "    total\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            entry = root / "program.kn"
+            entry.write_text(
+                'import "lib/digits.kn"\n'
+                "\n"
+                "func main() {\n"
+                '    print(count_digits("abc123def45"))\n'
+                '    print(count_digits("no digits here"))\n'
+                '    print(len("abc123def45"))\n'
+                "}\n",
+                encoding="utf-8",
+            )
+            result = self._run_source(
+                entry.read_text(encoding="utf-8"), source_path=entry
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "5\n0\n11\n")
 
     def test_string_operations_produce_expected_values(self):
         result = self._run_source(

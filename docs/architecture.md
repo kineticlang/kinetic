@@ -1,14 +1,15 @@
 # Compiler architecture
 
-Kinetic's 1.5.1 implementation lives in the [compiler source directory](../compiler/README.md).
+Kinetic's 1.6.0 implementation lives in the [compiler source directory](../compiler/README.md).
 It is a flat Python package with separate modules for each compilation stage.
 
 ## Entry points
 
 The root [launcher](../kinetic.py) delegates to the
-[CLI](../compiler/cli.py). The CLI reads a source file, calls the
-[compilation API](../compiler/compiler.py), writes the resulting IR,
-and invokes Clang to link a native executable. Run mode then starts it.
+[CLI](../compiler/cli.py). The CLI reads a source file, passes that path to the
+[compilation API](../compiler/compiler.py) so its `import` declarations resolve,
+writes the resulting IR, and invokes Clang to link a native executable. Run mode
+then starts it.
 
 The [module launcher](../compiler/__main__.py) and the installed command
 declared in [pyproject.toml](../pyproject.toml) delegate to the same CLI; there are
@@ -20,25 +21,43 @@ no separate implementations for these entry points.
 | --- | --- | --- |
 | Lexing | Source text → tokens with locations | [Lexer](../compiler/lexer.py) and [tokens](../compiler/tokens.py) |
 | Parsing | Tokens → abstract syntax tree | [Parser](../compiler/parser.py) and [AST](../compiler/ast.py) |
-| Semantic analysis | Syntax tree → inferred and checked types | [Analyzer](../compiler/analyzer.py) and [types](../compiler/types.py) |
+| Module resolution | Syntax tree with import declarations → one merged program | [Module loader](../compiler/modules.py) |
+| Semantic analysis | Merged program → inferred and checked types | [Analyzer](../compiler/analyzer.py) and [types](../compiler/types.py) |
 | Code generation | Checked program → textual LLVM IR | [LLVM backend](../compiler/backend.py) |
 | IR verification | Textual IR → verified textual IR | [Pipeline coordinator](../compiler/compiler.py) using llvmlite's LLVM bindings |
 | Native build | Verified IR → native executable | [CLI](../compiler/cli.py) invoking Clang |
 
 The pipeline is coordinated by
-[`compile_with_diagnostics()`](../compiler/compiler.py:7), which returns verified
-IR and a diagnostics collector. [`compile_source()`](../compiler/compiler.py:23)
+[`compile_with_diagnostics()`](../compiler/compiler.py:10), which returns verified
+IR and a diagnostics collector. [`compile_source()`](../compiler/compiler.py:29)
 wraps it for callers that only need IR. Errors raise subclasses of
 [`KineticError`](../compiler/errors.py:1). The CLI displays line/column information
 where the error provides it; not every error currently has a location. Warnings
 are collected during analysis and displayed with a singular/plural summary.
 Errors stop the pipeline at the first failure; this is not multi-error recovery.
 
+Since 1.6.0, `import "path.kn"` declarations are resolved by the
+[module loader](../compiler/modules.py) between parsing and analysis. The loader
+reads and parses each module, resolves that module's own imports first, and only
+then appends its records and functions, so dependencies precede dependents and the
+merged declaration order is deterministic. It canonicalizes every path so each file
+contributes once, tracks the chain currently being loaded to report import cycles,
+rejects paths without the `.kn` suffix and modules that declare `main`, and applies
+one host-independent path rule: a rooted, drive-qualified, or backslash-separated
+path is a compile-time error rather than something resolved differently on Windows
+and POSIX hosts. It then re-tags a module's lexer or parser errors with that
+module's name in the message while keeping the module's own line and column. The
+merged program keeps a single top-level namespace, so duplicate names across files
+are the analyzer's existing duplicate-definition errors. `compile_with_diagnostics()` and
+`compile_source()` take the source file path next to the source text and the CLI
+passes it; compiling bare text that contains an import is an error, and the analyzer
+rejects any import declaration that reaches it unresolved.
+
 The analyzer emits warnings for unused bindings and shadowing, and reports
 errors for immutable reassignment, indexed writes through immutable bindings,
 undefined names, type mismatches, constant
-out-of-bounds array indexes, an invalid `main` entry point, and duplicate
-function parameters. Lexical binding identity is preserved while analyzing
+out-of-bounds array indexes, an invalid `main` entry point, duplicate function
+definitions and parameters, and import declarations that were never resolved. Lexical binding identity is preserved while analyzing
 shadowing so usage diagnostics and scoped array facts refer to the declaration
 that is actually visible. The lexer
 rejects removed syntax (such as `fn`) with an explicit migration hint, and the
@@ -123,7 +142,7 @@ Runtime range checks protect only the index range; neither they nor the
 allocation-failure guard reclaim storage, prevent unbounded growth, or
 constitute a production memory-safety model. The pointer/count representation
 was introduced as an internal ABI change in 1.2.0 and is unchanged through
-1.5.1;
+1.6.0;
 it is not the proposed host adapter's opaque-buffer ABI.
 
 The CLI preserves nonnegative child exit statuses and maps signal termination
@@ -155,7 +174,7 @@ the repository root; the installed command uses the same code.
 
 The [roadmap](../ROADMAP.md) tracks the language, runtime, and validation work
 needed before Kinetic can host its own compiler. Those planned components are
-not part of the 1.5.1 implementation described here.
+not part of the 1.6.0 implementation described here.
 
 The [bootstrap host interface](bootstrap_interface.md) specifies the future
 native-service boundary, buffer ownership, and textual-IR build protocol. It is
@@ -168,8 +187,12 @@ compiler. The byte and length examples exercise the new builtin and array
 metadata, the [host-I/O example](../examples/12_host_io.kn) exercises the
 1.4.0 file, argument, diagnostic, and exit builtins, and the
 [records example](../examples/13_records.kn) exercises record construction,
-field reads, and guarded field writes; none implements the host
-adapter, buffer handles, or status-returning native services.
+field reads, and guarded field writes. The
+[modules example](../examples/14_modules.kn) compiles an imported module from
+[examples/modules](../examples/modules/README.md) into the same program; module
+resolution is a compiler front-end step and not part of the host adapter. None of
+these programs implements the host adapter, buffer handles, or status-returning
+native services.
 
 Verification is split into [layout, frontend, backend, and native suites](../tests/README.md).
 Only the explicit layout suite is static-only; the general runner can generate

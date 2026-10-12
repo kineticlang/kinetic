@@ -7,7 +7,7 @@ examples, and repository maintenance.
 
 | Directory | Responsibility |
 | --- | --- |
-| [Compiler](../compiler/README.md) | The Python package, with the lexer, parser, analyzer, backend, and CLI directly inside it. |
+| [Compiler](../compiler/README.md) | The Python package, with the lexer, parser, module loader, analyzer, backend, and CLI directly inside it. |
 | [Documentation](README.md) | Language syntax, compiler architecture, and repository guides. |
 | [Examples](../examples/README.md) | Complete Kinetic programs used in tutorials and manual verification. |
 | [Tools](../tools/README.md) | Development and repository maintenance utilities. |
@@ -30,13 +30,14 @@ examples, and repository maintenance.
 | [Roadmap](../ROADMAP.md) | Completed work, current priorities, and future milestones. |
 | [License](../LICENSE) | Project licensing. |
 
-The compiler sources remain a flat package in release 1.5.1. The
+The compiler sources remain a flat package in release 1.6.0. The
 [bootstrap host interface](bootstrap_interface.md) lives in documentation because
 it is a design contract, not an implemented runtime package. Its current-syntax
 examples belong alongside the other numbered programs, with intentional
 compile-time failures, runtime bounds failures, and warnings in their own example
 subdirectories. The length builtin and runtime guards are implemented in the
-existing analyzer/backend modules; they do not require a new package layer.
+existing analyzer/backend modules, and import declarations are resolved by the
+module loader; neither requires a new package layer.
 
 [Ignore rules](../.gitignore) cover Python/package caches, generated IR, native
 objects, Windows debug/link outputs, and known extensionless example binaries.

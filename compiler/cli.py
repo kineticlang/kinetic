@@ -10,7 +10,7 @@ from .errors import KineticError
 def build_command(source_path: Path) -> Path:
     source_text = source_path.read_text(encoding="utf-8")
 
-    result = compile_with_diagnostics(source_text)
+    result = compile_with_diagnostics(source_text, source_path)
 
     for warning in result.diagnostics.render_warnings():
         print(warning, file=sys.stderr)

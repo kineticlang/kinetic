@@ -1,7 +1,7 @@
 # Compiler sources
 
 This directory is Kinetic's Python package. All compiler stages and the CLI live
-directly here, with one source file per concern. It implements Kinetic 1.5.1.
+directly here, with one source file per concern. It implements Kinetic 1.6.0.
 
 | Stage or concern | Source |
 | --- | --- |
@@ -9,6 +9,7 @@ directly here, with one source file per concern. It implements Kinetic 1.5.1.
 | Pipeline orchestration and IR verification | [Compiler](compiler.py) |
 | Lexing and token definitions | [Lexer](lexer.py), [tokens](tokens.py) |
 | Parsing and syntax tree | [Parser](parser.py), [AST](ast.py) |
+| Module resolution | [Module loader](modules.py) |
 | Type checking and inference | [Analyzer](analyzer.py), [types](types.py) |
 | LLVM code generation | [Backend](backend.py) |
 | Diagnostics and source locations | [Diagnostics](diagnostics.py), [errors](errors.py) |
@@ -16,8 +17,8 @@ directly here, with one source file per concern. It implements Kinetic 1.5.1.
 | Module entry point | [Module launcher](__main__.py) |
 
 Stage modules use package-relative imports. The orchestration entry point is
-[`compile_with_diagnostics()`](compiler.py:7), returning verified textual IR and
-warnings. [`compile_source()`](compiler.py:23) returns just the IR and is lazily
+[`compile_with_diagnostics()`](compiler.py:10), returning verified textual IR and
+warnings. [`compile_source()`](compiler.py:29) returns just the IR and is lazily
 exported by the package initializer. Backend dependencies are imported only when
 code generation is reached; frontend analysis can run without llvmlite.
 
@@ -26,6 +27,15 @@ command all use the same CLI. [pyproject.toml](../pyproject.toml) packages this
 directory directly.
 
 See the [architecture guide](../docs/architecture.md) for dependencies between stages.
+The module loader reads and parses imported files between parsing and analysis: it
+accepts only relative, forward-slash `import "path.kn"` paths, enforces that rule
+identically on every host, resolves each path relative to the importing file, merges
+modules dependency-first, loads each canonical path once, rejects cycles, rejects a
+module that declares `main`, and keeps one top-level namespace. A rooted,
+drive-qualified, or backslash-separated path is a compile-time error instead of a
+host-dependent lookup. The pipeline API takes the source path alongside the source
+text so the loader can find a program's modules; the analyzer rejects unresolved
+import declarations rather than resolving them.
 The analyzer and backend jointly implement the array-length builtin. They likewise
 share the 1.4.0 host-I/O builtins (`read_file`, `write_file`, `arg_count`, `arg`,
 `eprint`, `exit`), which lower to C library calls; generated `main` functions

@@ -18,9 +18,77 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(examples, "No valid examples were found")
         for example in examples:
             with self.subTest(example=example.name):
-                llvm_ir = compile_source(example.read_text(encoding="utf-8"))
+                llvm_ir = compile_source(
+                    example.read_text(encoding="utf-8"), example
+                )
                 self.assertIn("define", llvm_ir)
                 self.assertIn('@"main"', llvm_ir)
+
+    def test_imported_module_functions_reach_codegen(self):
+        import tempfile
+        from pathlib import Path
+        from compiler.compiler import compile_source
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module = root / "lib" / "digits.kn"
+            module.parent.mkdir(parents=True)
+            module.write_text(
+                "func is_digit(byte) {\n"
+                "    if byte > 47 {\n"
+                "        if byte < 58 { 1 } else { 0 }\n"
+                "    } else {\n"
+                "        0\n"
+                "    }\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            entry = root / "program.kn"
+            entry.write_text(
+                'import "lib/digits.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    print(is_digit(51))\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            llvm_ir = compile_source(entry.read_text(encoding="utf-8"), entry)
+            self.assertIn('define i64 @"is_digit"', llvm_ir)
+            self.assertIn('call i64 @"is_digit"', llvm_ir)
+            self.assertLess(
+                llvm_ir.index('@"is_digit"'), llvm_ir.index('@"main"')
+            )
+
+    def test_imports_match_the_equivalent_single_file_program(self):
+        import tempfile
+        from pathlib import Path
+        from compiler.compiler import compile_source
+
+        module_text = "func triple(value) {\n    value * 3\n}\n"
+        entry_text = (
+            'import "lib.kn"\n'
+            "\n"
+            "func main() {\n"
+            "    print(triple(4))\n"
+            "}\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "lib.kn").write_text(module_text, encoding="utf-8")
+            entry = root / "program.kn"
+            entry.write_text(entry_text, encoding="utf-8")
+            merged = compile_source(entry.read_text(encoding="utf-8"), entry)
+
+        combined = module_text + "\n" + "func main() {\n    print(triple(4))\n}\n"
+        self.assertEqual(merged, compile_source(combined))
+
+    def test_imports_need_a_source_path_before_codegen(self):
+        from compiler.compiler import compile_source
+        from compiler.errors import CompileError
+
+        with self.assertRaises(CompileError) as raised:
+            compile_source('import "lib.kn"\n\nfunc main() {\n}\n')
+        self.assertIn("source file path", str(raised.exception))
 
     def test_hello_world_ir_contains_printf(self):
         from compiler.compiler import compile_source

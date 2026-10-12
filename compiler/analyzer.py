@@ -62,10 +62,27 @@ class TypeAnalyzer:
         self.diagnostics = (
             diagnostics if diagnostics is not None else Diagnostics()
         )
-        function_names = {function.name for function in program.functions}
-        if len(function_names) != len(program.functions):
-            raise CompileError("duplicate function definition")
-        if "main" not in function_names:
+        if program.imports:
+            declaration = program.imports[0]
+            location = declaration.location
+            raise CompileError(
+                "import declarations must be resolved before analysis",
+                location.line if location else None,
+                location.column if location else None,
+            )
+
+        seen_functions: set[str] = set()
+        for function in program.functions:
+            if function.name in seen_functions:
+                location = function.location
+                raise CompileError(
+                    f"duplicate function definition {function.name!r}",
+                    location.line if location else None,
+                    location.column if location else None,
+                )
+            seen_functions.add(function.name)
+
+        if "main" not in seen_functions:
             location = program.functions[0].location if program.functions else None
             raise CompileError(
                 "program has no 'main' entry point",

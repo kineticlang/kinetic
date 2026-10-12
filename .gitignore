@@ -35,6 +35,7 @@ kinetic_app
 /examples/11_indexed_writes
 /examples/12_host_io
 /examples/13_records
+/examples/14_modules
 /examples/warnings/unused_variable
 /examples/warnings/shadowing
 /examples/runtime_errors/out_of_bounds

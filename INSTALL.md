@@ -1,6 +1,6 @@
 # Installing and running Kinetic
 
-These instructions describe Kinetic 1.5.1. The version is declared in
+These instructions describe Kinetic 1.6.0. The version is declared in
 [package configuration](pyproject.toml).
 
 ## Requirements
@@ -75,8 +75,11 @@ that warning is not a build failure.
 Common generated outputs are covered by [.gitignore](.gitignore). Remove artifacts
 after manual verification, especially binaries from newly added examples.
 
-The [example catalog](examples/README.md) includes thirteen valid numbered programs,
-compile-time failures, runtime bounds failures, and warning demonstrations. The bootstrap status and byte
+The [example catalog](examples/README.md) includes fourteen valid numbered programs,
+one of which imports the [module](examples/modules/README.md) beside it, plus
+compile-time failures, runtime bounds failures, and warning demonstrations.
+Import paths are resolved relative to the file that contains them, so build
+programs from a path that still finds their modules. The bootstrap status and byte
 examples use the existing language; the proposed host services are not installed
 by these setup commands.
 

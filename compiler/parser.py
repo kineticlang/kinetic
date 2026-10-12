@@ -9,6 +9,7 @@ from .ast import (
     FieldExpr,
     Function,
     IfStatement,
+    ImportDecl,
     IndexAssignStatement,
     IndexExpr,
     LetStatement,
@@ -38,12 +39,33 @@ class Parser:
     def parse(self) -> Program:
         functions: list[Function] = []
         records: list[RecordDecl] = []
+        imports: list[ImportDecl] = []
+        seen_declaration = False
         while self.current.kind is not TokenKind.EOF:
-            if self.current.kind is TokenKind.RECORD:
+            if self.current.kind is TokenKind.IMPORT:
+                if seen_declaration:
+                    token = self.current
+                    raise ParseError(
+                        "import declarations must appear before function and "
+                        "record declarations",
+                        token.line,
+                        token.column,
+                    )
+                imports.append(self._parse_import())
+            elif self.current.kind is TokenKind.RECORD:
+                seen_declaration = True
                 records.append(self._parse_record())
             else:
+                seen_declaration = True
                 functions.append(self._parse_function())
-        return Program(functions, records)
+        return Program(functions, records, imports)
+
+    def _parse_import(self) -> ImportDecl:
+        keyword = self._advance()
+        path = self._expect(
+            TokenKind.STRING, "expected a string module path after 'import'"
+        ).value
+        return ImportDecl(self._location(keyword), path)
 
     def _location(self, token: Token | None = None) -> SourceLocation:
         current = token if token is not None else self.current

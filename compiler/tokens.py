@@ -10,6 +10,7 @@ class TokenKind(Enum):
     IF = auto()
     ELSE = auto()
     RECORD = auto()
+    IMPORT = auto()
     IDENT = auto()
     NUMBER = auto()
     STRING = auto()

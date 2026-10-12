@@ -27,13 +27,14 @@ python -B tools/check.py
 The [runner](check.py) discovers layout, frontend, backend, and native suites.
 It returns a nonzero status on failure and does not install dependencies.
 
-- Frontend tests import and exercise the lexer, parser, and analyzer.
+- Frontend tests import and exercise the lexer, parser, module loader, and analyzer.
 - Backend tests generate and verify IR when llvmlite is installed; they are
   skipped when the dependency is unavailable.
 - Native tests require explicit opt-in plus Clang and llvmlite. They build and
   execute programs in temporary directories.
 
-The 1.5.1 suites include array-length inference, descriptor propagation,
+The 1.6.0 suites include module resolution (relative, transitive, repeated,
+cyclic, and invalid import declarations), array-length inference, descriptor propagation,
 indexed writes, emitted
 bounds guards, heap-backed element storage, allocation-failure traps (a
 backend assertion and a Linux native failure-injection test), host-I/O

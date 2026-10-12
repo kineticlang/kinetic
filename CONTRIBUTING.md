@@ -8,7 +8,7 @@ stages over adding infrastructure intended for a much larger language project.
 - [Installation](INSTALL.md) covers the source-checkout and editable-install workflows.
 - [Architecture](docs/architecture.md) explains the compilation pipeline.
 - [Repository layout](docs/repository_layout.md) explains where changes belong.
-- [Language guide](docs/syntax_guide.md) documents the existing 1.5.1 surface.
+- [Language guide](docs/syntax_guide.md) documents the existing 1.6.0 surface.
 - [Bootstrap host interface](docs/bootstrap_interface.md) defines a future interface, not available builtins.
 - [Roadmap](ROADMAP.md) tracks implemented features and the path toward self-hosting.
 
@@ -20,6 +20,7 @@ stages over adding infrastructure intended for a much larger language project.
 | Syntax representation | [AST](compiler/ast.py). |
 | Type rules and inference | [Analyzer](compiler/analyzer.py) and [types](compiler/types.py). |
 | LLVM generation | [Backend](compiler/backend.py). |
+| Module resolution | [Module loader](compiler/modules.py). |
 | Pipeline orchestration | [Compiler API](compiler/compiler.py). |
 | User-facing build and run commands | [CLI](compiler/cli.py). |
 | Maintenance commands | [Tools](tools/README.md). |
@@ -32,6 +33,15 @@ contain another implementation of the build workflow.
 Printing is currently a compiler builtin, not a library function. Changes to
 builtins need matching analyzer and backend handling. Do not create a placeholder
 standard-library tree before there is an actual library implementation.
+
+Import resolution lives in the module loader between parsing and analysis. It
+requires import paths to be relative and forward-slash based under one
+host-independent rule, merges a module's functions and records dependency-first,
+loads each canonical path once, rejects cycles and a module that declares
+`main`, and leaves one shared top-level namespace. Keep it free of analyzer and
+backend dependencies, report a module's own line and column when its contents
+fail while naming the imported file, and cover new behavior in the loader tests
+plus an example when it changes what programs can do.
 
 The array-length builtin likewise requires matching analyzer and backend
 handling. Preserve pointer/count metadata across array copies, mutable storage,
@@ -111,6 +121,7 @@ python kinetic.py run examples/10_text.kn
 python kinetic.py run examples/11_indexed_writes.kn
 python kinetic.py run examples/12_host_io.kn
 python kinetic.py run examples/13_records.kn
+python kinetic.py run examples/14_modules.kn
 ```
 
 These commands **do compile and execute programs**. Do not use them when a task

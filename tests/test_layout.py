@@ -10,7 +10,7 @@ PACKAGE = ROOT / "compiler"
 SOURCE_DIRECTORIES = ("compiler", "tools", "tests")
 COMPILER_MODULES = (
     "analyzer", "ast", "backend", "cli", "compiler",
-    "errors", "lexer", "parser", "tokens", "types",
+    "errors", "lexer", "modules", "parser", "tokens", "types",
 )
 
 
@@ -46,16 +46,18 @@ class RepositoryLayoutTests(unittest.TestCase):
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
             "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
-            "13_records.kn",
+            "13_records.kn", "14_modules.kn",
         ):
             with self.subTest(example=name):
                 self.assertTrue((ROOT / "examples" / name).is_file())
+        self.assertTrue((ROOT / "examples" / "modules" / "text_utils.kn").is_file())
         for name in (
             "immutable_reassign.kn", "out_of_bounds.kn", "missing_main.kn",
             "old_fn_keyword.kn", "old_let_mut.kn", "undefined_variable.kn",
             "type_mismatch.kn", "main_parameters.kn",
             "duplicate_parameters.kn",
             "len_type.kn", "len_arity.kn", "record_field_immutable.kn",
+            "import_after_declaration.kn",
         ):
             with self.subTest(error_example=name):
                 self.assertTrue((ROOT / "examples" / "errors" / name).is_file())
@@ -114,7 +116,7 @@ class RepositoryLayoutTests(unittest.TestCase):
         self.assertEqual(mapping, {
             "func": "FUNC", "let": "LET", "mut": "MUT",
             "while": "WHILE", "if": "IF", "else": "ELSE",
-            "record": "RECORD",
+            "record": "RECORD", "import": "IMPORT",
         })
 
     def test_hello_world_is_published_in_readme(self):
@@ -126,6 +128,7 @@ class RepositoryLayoutTests(unittest.TestCase):
 
     def test_examples_and_guide_use_current_declarations(self):
         paths = sorted((ROOT / "examples").glob("*.kn"))
+        paths.extend(sorted((ROOT / "examples" / "modules").glob("*.kn")))
         paths.append(ROOT / "docs" / "syntax_guide.md")
         for path in paths:
             text = path.read_text(encoding="utf-8")

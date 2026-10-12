@@ -5,7 +5,7 @@
 Kinetic's next major destination is **self-hosting**: a compiler written in
 Kinetic that can compile its own source and build a working successor compiler.
 
-The current compiler is a Python 1.5.1 prototype. It is not self-hosting, and no
+The current compiler is a Python 1.6.0 prototype. It is not self-hosting, and no
 compiler stage has been ported to Kinetic yet. The language and runtime need
 additional capabilities before that port is practical.
 
@@ -41,8 +41,8 @@ and opt in through an environment flag, which hosted CI sets. See
 ### Declaration syntax and CI rollout
 
 The compiler sources, examples, and guides now use
-[`func`](compiler/lexer.py:33), [`let`](compiler/lexer.py:34), and standalone
-[`mut`](compiler/lexer.py:35). The [Hello World example](examples/01_hello.kn)
+[`func`](compiler/lexer.py:34), [`let`](compiler/lexer.py:35), and standalone
+[`mut`](compiler/lexer.py:36). The [Hello World example](examples/01_hello.kn)
 shows the function declaration in a complete program.
 
 The [GitHub workflow](.github/workflows/ci.yml) runs the shared general test
@@ -154,7 +154,21 @@ likewise be established from results, not configuration or written tests alone.
   the [bootstrap interface](docs/bootstrap_interface.md); they do not provide
   streaming, partial reads, or directory operations. Verified by the hosted
   behavioral and native CI jobs.
-- [ ] Multi-file organization and a way to resolve compiler modules.
+- [x] Multi-file organization and a way to resolve compiler modules (1.6.0):
+  `import "path.kn"` declarations merge another file's functions and records
+  into the program being compiled. Paths are string literals resolved relative
+  to the importing file under one host-independent rule: they must end in `.kn`,
+  use forward slashes, and stay relative, so rooted, drive-qualified, and
+  backslash-separated paths are compile-time errors instead of host-dependent
+  lookups. Imports may be transitive, load each file once, and import cycles are
+  rejected with the cycle named. Imported declarations join the importer's
+  single top-level namespace, an imported module must not declare `main`, and
+  the compilation API takes the source path alongside the text so the CLI can
+  resolve imports. Covered by module-resolution
+  frontend regressions, an IR equivalence check, and native execution of the
+  [modules example](examples/14_modules.kn) in the shared suites. Those suites
+  passed locally for 1.6.0, native build and execution included; the hosted
+  behavioral and native jobs run the same suites on every push.
 - [x] A documented interface to native services and the LLVM/Clang toolchain
   that does not require Python-specific llvmlite APIs inside Kinetic code
   ([bootstrap host interface](docs/bootstrap_interface.md)). This completes the

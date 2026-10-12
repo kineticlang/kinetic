@@ -1,6 +1,6 @@
 # The Kinetic Syntax Guide
 
-This guide describes the 1.5.1 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
+This guide describes the 1.6.0 prototype. Kinetic explores readable systems-language syntax, but it does not yet provide a production memory-safety model.
 
 Kinetic uses concise declarations and compiles through LLVM. The examples below
 show current syntax, not the proposed bootstrap host-service API.
@@ -11,10 +11,11 @@ See the [documentation index](README.md) for installation and architecture guide
 
 | Purpose | Keyword |
 | --- | --- |
-| Define a function | [`func`](../compiler/lexer.py:33) |
-| Declare an immutable binding | [`let`](../compiler/lexer.py:34) |
-| Declare a mutable binding | [`mut`](../compiler/lexer.py:35) |
-| Declare a record type | [`record`](../compiler/lexer.py:39) |
+| Define a function | [`func`](../compiler/lexer.py:34) |
+| Declare an immutable binding | [`let`](../compiler/lexer.py:35) |
+| Declare a mutable binding | [`mut`](../compiler/lexer.py:36) |
+| Declare a record type | [`record`](../compiler/lexer.py:40) |
+| Import another file | [`import`](../compiler/lexer.py:41) |
 
 Declaring a name, reassigning a value, and calling a function are separate
 operations. A mutable declaration starts directly with its own keyword.
@@ -29,7 +30,7 @@ let name = "Coheret"
 let age = 5
 ```
 
-For a binding that can be reassigned, use [`mut`](../compiler/lexer.py:35) as the declaration keyword:
+For a binding that can be reassigned, use [`mut`](../compiler/lexer.py:36) as the declaration keyword:
 
 ```text
 mut counter = 0
@@ -37,13 +38,13 @@ counter = counter + 1 // Reassignment has no declaration keyword.
 ```
 
 Binding immutability is not a general guarantee that referenced data is deeply
-immutable or memory-safe. Version 1.5.1 supports integer-array reads and
+immutable or memory-safe. Version 1.6.0 supports integer-array reads and
 indexed writes through mutable bindings, but does not implement a production
 memory-safety model.
 
 ## 2. Functions (doing things)
 
-Functions are defined with [`func`](../compiler/lexer.py:33). We keep the syntax clean—no semicolons at the end of every line, and the last expression evaluated is automatically returned.
+Functions are defined with [`func`](../compiler/lexer.py:34). We keep the syntax clean—no semicolons at the end of every line, and the last expression evaluated is automatically returned.
 
 ```text
 func calculate_speed(distance, time) {
@@ -51,7 +52,7 @@ func calculate_speed(distance, time) {
 }
 ```
 
-The `main` function is the entry point of your program. In the 1.5.1 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error, and program arguments are instead available through the builtins in section 8. When you run your executable, this is where the action starts.
+The `main` function is the entry point of your program. In the 1.6.0 prototype it has a fixed no-argument entry shape; declaring parameters on `main` is a compile-time error, and program arguments are instead available through the builtins in section 8. When you run your executable, this is where the action starts.
 
 ```text
 func main() {
@@ -79,7 +80,7 @@ if speed > speed_limit {
 }
 ```
 
-Comparisons in 1.5.1 are limited to equality, less-than, and greater-than. They
+Comparisons in 1.6.0 are limited to equality, less-than, and greater-than. They
 work on integers and, bytewise, on strings.
 
 ## 4. Loops (doing things repeatedly)
@@ -97,7 +98,7 @@ while i < 3 {
 
 ## 5. Arrays (lists of things)
 
-Version 1.5.1 arrays contain integers. Array literals, indexed reads, and
+Version 1.6.0 arrays contain integers. Array literals, indexed reads, and
 indexed writes through mutable bindings are supported;
 arrays of strings, records, and mixed element types are not part of the current language.
 
@@ -118,7 +119,7 @@ Behind the scenes, the LLVM backend uses pointer arithmetic to access array elem
 
 ### Array and string length
 
-[`len()`](../compiler/analyzer.py:450) is a compiler builtin accepting exactly one
+[`len()`](../compiler/analyzer.py:744) is a compiler builtin accepting exactly one
 integer array or string. For an array it returns the element count; an empty
 array has length zero. For a string it returns the number of bytes before the
 terminator, matching C's `strlen`. Integers, booleans, missing arguments, and
@@ -171,7 +172,7 @@ scores[1] = 99
 print(scores[1])  // 99
 ```
 
-The assignment target must be a variable declared with [`mut`](../compiler/lexer.py:35);
+The assignment target must be a variable declared with [`mut`](../compiler/lexer.py:36);
 indexed writes through immutable bindings or function parameters are
 compile-time errors, and strings are not writable. The index and the value
 must both be integers. Writes carry the same compile-time constant-bounds
@@ -316,7 +317,7 @@ C runtime symbols and stream accessors the backend emits. See the
 
 ## 9. Records (grouping named fields)
 
-Since 1.5.0, a [`record`](../compiler/lexer.py:39) declaration defines a type
+Since 1.5.0, a [`record`](../compiler/lexer.py:40) declaration defines a type
 with named, typed fields. Field types are `Int`, `String`, `[Int]`, or the
 name of a record declared earlier in the file; recursive and forward
 references are rejected at compile time.
@@ -341,7 +342,7 @@ func main() {
   (`shift(point, 1, 2).x`). Records flow through function parameters, results,
   and conditional branches like any other value.
 - Field writes require the target to be a variable declared with
-  [`mut`](../compiler/lexer.py:35), mirroring indexed array writes; immutable
+  [`mut`](../compiler/lexer.py:36), mirroring indexed array writes; immutable
   bindings and parameters are compile-time errors, and nested targets like
   `make().x = 1` are rejected.
 - Records are value aggregates: assigning or passing one copies every field.
@@ -356,3 +357,51 @@ Record names share the top-level namespace with functions and builtins, so a
 record cannot reuse a function or builtin name, and a function cannot reuse a
 record name. See the [records example](../examples/13_records.kn) for a
 complete program.
+
+## 10. Imports (splitting a program across files)
+
+Since 1.6.0, an [`import`](../compiler/lexer.py:41) declaration adds the
+functions and records of another file to the program being compiled. Import
+declarations come first, before any function or record declaration.
+
+```text
+// examples/14_modules.kn
+import "modules/text_utils.kn"
+
+func main() {
+    let text = "abc123def45"
+    print(count_digits(text))
+}
+```
+
+- The path is a string literal naming a file relative to the file that contains
+  the declaration, and it must end in `.kn`. Only relative paths are accepted:
+  rooted (`/lib.kn`, `\lib.kn`), drive-qualified (`C:/lib.kn`, `C:lib.kn`), and
+  UNC (`\\server\share\lib.kn`) paths are rejected, and separators must be
+  forward slashes, so `modules\text_utils.kn` is a compile-time error rather
+  than a Windows-only import. The same paths are accepted and rejected on every
+  host, so an import that builds on one platform builds on the others.
+- Imports are transitive. An imported module may import further modules, and
+  each of those paths is resolved relative to that module, not to the program
+  that started the build.
+- Every file is loaded once. Importing a module directly and again through
+  another module contributes its declarations a single time, and import cycles
+  are compile-time errors that name the files in the cycle.
+- Imported declarations join the importing program's one top-level namespace.
+  Names must be unique across all files in the program, so a function or record
+  that clashes with an imported name is a compile-time error. Calls may reach an
+  imported name from any file, including through another module.
+- Only the program that starts a build declares `main`. An imported module that
+  declares `main` is rejected, because modules hold the declarations that
+  programs reuse.
+- A diagnostic inside a module reports that module's own line and column and
+  names the imported file. A missing file, an unreadable file, or a path that
+  breaks any of the rules above is reported at the `import` declaration that
+  named it.
+
+Imports still produce one compiled program and one native executable: modules
+are resolved at build time. There is no separate compilation and linking step,
+no namespace prefix or module-private declaration, no package manager, and no
+directory search — the path in the declaration is the whole resolution rule.
+The [modules example](../examples/14_modules.kn) and its
+[module directory](../examples/modules/README.md) show a complete program.

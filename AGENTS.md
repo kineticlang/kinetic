@@ -1,6 +1,6 @@
 # Agent guidance
 
-Kinetic is a 1.5.1 prototype language compiler written in Python. It emits textual
+Kinetic is a 1.6.0 prototype language compiler written in Python. It emits textual
 LLVM IR through llvmlite and invokes Clang for native binaries. Keep changes small
 and do not imply that the prototype provides a production memory-safety model.
 
@@ -77,6 +77,7 @@ python kinetic.py run examples/10_text.kn
 python kinetic.py run examples/11_indexed_writes.kn
 python kinetic.py run examples/12_host_io.kn
 python kinetic.py run examples/13_records.kn
+python kinetic.py run examples/14_modules.kn
 ```
 
 **If the user asks not to compile or run programs, do not invoke these commands,
@@ -106,14 +107,26 @@ verification record for IR and runtime changes.
 ## Architecture
 
 The root launcher delegates to the [CLI](compiler/cli.py), which calls
-[`compile_with_diagnostics()`](compiler/compiler.py:7), the single pipeline
-orchestration point. [`compile_source()`](compiler/compiler.py:23) wraps it for
+[`compile_with_diagnostics()`](compiler/compiler.py:10), the single pipeline
+orchestration point. [`compile_source()`](compiler/compiler.py:29) wraps it for
 callers that need only the IR.
 
 The stage order is [lexer](compiler/lexer.py),
-[parser](compiler/parser.py), [analyzer](compiler/analyzer.py), and
-[LLVM backend](compiler/backend.py). The orchestration API verifies the
-IR with llvmlite before returning it.
+[parser](compiler/parser.py), [module resolution](compiler/modules.py),
+[analyzer](compiler/analyzer.py), and [LLVM backend](compiler/backend.py).
+The orchestration API verifies the IR with llvmlite before returning it.
+
+The 1.6.0 module loader runs between parsing and analysis. `import "path.kn"`
+declarations are resolved relative to the importing file, must end in `.kn`,
+must be relative and forward-slash based under one host-independent rule that
+rejects rooted, drive-qualified, and backslash-separated paths on every
+platform, may be transitive, load each canonical path once, reject cycles, and
+reject a module that declares `main`. The merged program shares one top-level
+namespace, so duplicate names across files stay duplicate-definition errors.
+Keep the loader independent of analysis and code generation, and keep import
+handling there rather than in the analyzer or the backend. The compilation
+API takes the source path alongside the text and the CLI passes it; report a
+module's own line and column when its contents fail, naming the imported file.
 
 Printing is a compiler builtin, not a user-level or library function. It is
 special-cased in both the analyzer and backend, lowers to C's formatted-output
@@ -148,16 +161,19 @@ the bounds check. The CLI propagates failed child exit statuses. Test
 [runtime failures](examples/runtime_errors/README.md)
 separately from success examples when native execution is permitted.
 
-The [syntax guide](docs/syntax_guide.md) documents the 1.5.1 language. The
-thirteen numbered [examples](examples/README.md) cover inference, control flow,
+The [syntax guide](docs/syntax_guide.md) documents the 1.6.0 language. The
+fourteen numbered [examples](examples/README.md) cover inference, control flow,
 mutation, array lengths/lifetimes, indexed writes, text operations, host
-I/O, and records. Comparisons remain limited to
+I/O, records, and multi-file imports. The
+[fourteenth example](examples/14_modules.kn) imports the module in
+[examples/modules](examples/modules/README.md) and runs it. Comparisons remain limited to
 equality, less-than, and greater-than.
 
-Declarations use [`func`](compiler/lexer.py:33) for functions,
-[`let`](compiler/lexer.py:34) for immutable bindings, standalone
-[`mut`](compiler/lexer.py:35) for mutable bindings, and
-[`record`](compiler/lexer.py:39) for record types. Keep lexer tokens, parser
+Declarations use [`func`](compiler/lexer.py:34) for functions,
+[`let`](compiler/lexer.py:35) for immutable bindings, standalone
+[`mut`](compiler/lexer.py:36) for mutable bindings,
+[`record`](compiler/lexer.py:40) for record types, and
+[`import`](compiler/lexer.py:41) for module imports. Keep lexer tokens, parser
 handling, examples, and documentation synchronized when syntax changes.
 
 See [architecture](docs/architecture.md) and [contributing](CONTRIBUTING.md) before

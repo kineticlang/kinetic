@@ -119,6 +119,12 @@ class WhileStatement(Statement):
 
 
 @dataclass
+class ImportDecl:
+    location: SourceLocation | None = None
+    path: str = ""
+
+
+@dataclass
 class Function:
     name: str
     parameters: list[str]
@@ -143,3 +149,4 @@ class RecordDecl:
 class Program:
     functions: list[Function]
     records: list[RecordDecl] = field(default_factory=list)
+    imports: list[ImportDecl] = field(default_factory=list)

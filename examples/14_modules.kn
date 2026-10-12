@@ -1,0 +1,13 @@
+// 'import' merges another file's declarations into this program. Imports come
+// before functions and records, the path is relative to the importing file and
+// must end in '.kn', and importing the same file twice loads it once.
+
+import "modules/text_utils.kn"
+
+func main() {
+    let sample = "abc123def45"
+
+    print(count_digits(sample))
+    print(count_digits("no digits here"))
+    print(len(sample))
+}

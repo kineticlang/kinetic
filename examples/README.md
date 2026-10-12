@@ -1,6 +1,6 @@
 # Kinetic examples
 
-These are complete programs for learning and experimenting with the 1.5.1 language.
+These are complete programs for learning and experimenting with the 1.6.0 language.
 
 | Program | Focus |
 | --- | --- |
@@ -17,12 +17,13 @@ These are complete programs for learning and experimenting with the 1.5.1 langua
 | [Indexed writes](11_indexed_writes.kn) | In-place element writes through mutable bindings, visible through aliases. |
 | [Host I/O](12_host_io.kn) | Program arguments, whole-file read/write, diagnostic output, and exit status. |
 | [Records](13_records.kn) | Record declaration, positional construction, field reads, and guarded field writes. |
+| [Modules](14_modules.kn) | Import declarations, an imported module's functions, and the shared namespace. |
 
 Read the [syntax guide](../docs/syntax_guide.md) for the language rules.
 
-Declarations use [`func`](../compiler/lexer.py:33) for functions,
-[`let`](../compiler/lexer.py:34) for immutable bindings, and standalone
-[`mut`](../compiler/lexer.py:35) for mutable bindings.
+Declarations use [`func`](../compiler/lexer.py:34) for functions,
+[`let`](../compiler/lexer.py:35) for immutable bindings, and standalone
+[`mut`](../compiler/lexer.py:36) for mutable bindings.
 
 ## Bootstrap interface concepts
 
@@ -111,10 +112,26 @@ Expected output for the [records example](13_records.kn):
 3
 ```
 
+Expected output for the [modules example](14_modules.kn):
+
+```text
+5
+0
+11
+```
+
 These are program output expectations, excluding the launcher's build/run
 messages. The hosted native CI job builds and runs every numbered example with
 Clang on each push and checks for the expected output fragments; locally the native suite remains
 opt-in via `KINETIC_NATIVE_TESTS=1`.
+
+## Multi-file programs
+The [modules example](14_modules.kn) is the only numbered program that spans
+more than one file: it imports [text utilities](modules/text_utils.kn) from the
+[modules directory](modules/README.md) and calls the imported functions. An
+import declaration comes before the file's functions, its path is relative to
+the importing file, and the compiler merges the module into one program. See
+the [imports section](../docs/syntax_guide.md) of the syntax guide.
 
 ## Returned array lifetimes
 

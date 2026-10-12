@@ -1,0 +1,8 @@
+// ERROR: an import declaration must come before function and record declarations.
+// Move it to the top of the file; its path is then resolved relative to this file.
+
+func main() {
+    print("This program never compiles")
+}
+
+import "modules/text_utils.kn"

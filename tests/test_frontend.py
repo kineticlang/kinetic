@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from compiler.diagnostics import Diagnostics
 from compiler.errors import CompileError, LexerError, ParseError
@@ -28,6 +30,12 @@ class LexerTests(unittest.TestCase):
         kinds = [token.kind for token in tokenize("func let mut")]
         self.assertEqual(
             kinds, [TokenKind.FUNC, TokenKind.LET, TokenKind.MUT, TokenKind.EOF]
+        )
+
+    def test_import_keyword_maps_to_import_token(self):
+        kinds = [token.kind for token in tokenize('import "lib.kn"')]
+        self.assertEqual(
+            kinds, [TokenKind.IMPORT, TokenKind.STRING, TokenKind.EOF]
         )
 
     def test_locations_track_line_and_column(self):
@@ -110,6 +118,38 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(ParseError) as raised:
             parse("func main() {\n  let a = 1\n  let b = 2\n  a + b = 5\n}")
         self.assertIn("expected an expression", str(raised.exception))
+
+    def test_import_declarations_parse_paths_and_locations(self):
+        program = parse(
+            'import "lib/text.kn"\n'
+            'import "./more.kn"\n'
+            "func main() {\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [declaration.path for declaration in program.imports],
+            ["lib/text.kn", "./more.kn"],
+        )
+        self.assertEqual(program.imports[0].location.line, 1)
+        self.assertEqual(program.imports[1].location.line, 2)
+
+    def test_import_requires_a_string_path(self):
+        with self.assertRaises(ParseError) as raised:
+            parse("import lib\nfunc main() {\n}\n")
+        self.assertIn("string", str(raised.exception))
+        self.assertEqual(raised.exception.line, 1)
+
+    def test_import_after_a_declaration_is_rejected(self):
+        with self.assertRaises(ParseError) as raised:
+            parse('func helper() {\n  1\n}\nimport "lib.kn"\nfunc main() {\n}\n')
+        self.assertIn("before", str(raised.exception))
+        self.assertEqual(raised.exception.line, 4)
+
+    def test_import_after_a_record_declaration_is_rejected(self):
+        with self.assertRaises(ParseError) as raised:
+            parse('record Point {\n  x: Int\n}\nimport "lib.kn"\nfunc main() {\n}\n')
+        self.assertIn("before", str(raised.exception))
+        self.assertEqual(raised.exception.line, 4)
 
 
 class AnalyzerTests(unittest.TestCase):
@@ -987,6 +1027,397 @@ class RecordTests(unittest.TestCase):
                 self.assertIn(expected, str(raised.exception))
 
 
+class ModuleImportTests(unittest.TestCase):
+    DIGIT_MODULE = (
+        "func is_digit(byte) {\n"
+        "    if byte > 47 {\n"
+        "        if byte < 58 { 1 } else { 0 }\n"
+        "    } else {\n"
+        "        0\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "func count_digits(text) {\n"
+        "    mut index = 0\n"
+        "    mut total = 0\n"
+        "    while index < len(text) {\n"
+        "        if is_digit(text[index]) == 1 {\n"
+        "            total = total + 1\n"
+        "        }\n"
+        "        index = index + 1\n"
+        "    }\n"
+        "    total\n"
+        "}\n"
+    )
+
+    RANGE_MODULE = (
+        "record Range {\n"
+        "    start: Int\n"
+        "    stop: Int\n"
+        "}\n"
+        "\n"
+        "func span(range) {\n"
+        "    range.stop - range.start\n"
+        "}\n"
+    )
+
+    @staticmethod
+    def _write(root: Path, name: str, text: str) -> Path:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def _analyze_file(self, path: Path):
+        from compiler.modules import load_program
+
+        diagnostics = Diagnostics()
+        program = load_program(path)
+        types = TypeAnalyzer(program, diagnostics).analyze()
+        return program, types, diagnostics
+
+    def test_import_merges_module_functions_into_the_entry_program(self):
+        from compiler.types import KType
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib/digits.kn", self.DIGIT_MODULE)
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib/digits.kn"\n'
+                "\n"
+                "func main() {\n"
+                '    print(count_digits("a1b2"))\n'
+                "}\n",
+            )
+            program, types, _ = self._analyze_file(entry)
+            self.assertEqual(
+                [function.name for function in program.functions],
+                ["is_digit", "count_digits", "main"],
+            )
+            self.assertEqual(program.imports, [])
+            self.assertIs(types["is_digit"].result, KType.INT)
+            self.assertIs(types["count_digits"].result, KType.INT)
+
+    def test_imports_resolve_relative_to_the_importing_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib/inner.kn", "func twice(value) {\n    value + value\n}\n")
+            self._write(
+                root,
+                "lib/outer.kn",
+                'import "inner.kn"\n'
+                "\n"
+                "func quadruple(value) {\n"
+                "    twice(twice(value))\n"
+                "}\n",
+            )
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib/outer.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    print(quadruple(3))\n"
+                "}\n",
+            )
+            program, types, _ = self._analyze_file(entry)
+            self.assertEqual(
+                [function.name for function in program.functions],
+                ["twice", "quadruple", "main"],
+            )
+            self.assertIn("quadruple", types)
+
+    def test_transitive_imports_merge_dependencies_before_dependents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "deep.kn", "func deep() {\n    1\n}\n")
+            self._write(
+                root,
+                "middle.kn",
+                'import "deep.kn"\n'
+                "\n"
+                "func middle() {\n"
+                "    deep()\n"
+                "}\n",
+            )
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "middle.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    print(middle())\n"
+                "}\n",
+            )
+            program, _, _ = self._analyze_file(entry)
+            self.assertEqual(
+                [function.name for function in program.functions],
+                ["deep", "middle", "main"],
+            )
+
+    def test_records_from_modules_are_usable_in_the_entry_file(self):
+        from compiler.types import KType
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib/range.kn", self.RANGE_MODULE)
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib/range.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    let range = Range(2, 9)\n"
+                "    print(span(range))\n"
+                "    print(range.stop)\n"
+                "}\n",
+            )
+            program, types, _ = self._analyze_file(entry)
+            self.assertEqual(
+                [record.name for record in program.records], ["Range"]
+            )
+            self.assertIs(types["span"].result, KType.INT)
+
+    def test_repeated_and_diamond_imports_load_each_module_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "shared.kn", "func helper() {\n    7\n}\n")
+            self._write(
+                root,
+                "left.kn",
+                'import "shared.kn"\n'
+                "\n"
+                "func left_value() {\n"
+                "    helper()\n"
+                "}\n",
+            )
+            self._write(
+                root,
+                "right.kn",
+                'import "shared.kn"\n'
+                "\n"
+                "func right_value() {\n"
+                "    helper()\n"
+                "}\n",
+            )
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "left.kn"\n'
+                'import "right.kn"\n'
+                'import "shared.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    print(left_value() + right_value())\n"
+                "}\n",
+            )
+            program, _, _ = self._analyze_file(entry)
+            names = [function.name for function in program.functions]
+            self.assertEqual(names, ["helper", "left_value", "right_value", "main"])
+            self.assertEqual(names.count("helper"), 1)
+
+    def test_modules_and_entry_functions_share_one_program(self):
+        from compiler.types import KType
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib/scale.kn", "func doubled(value) {\n    scale(value)\n}\n")
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib/scale.kn"\n'
+                "\n"
+                "func scale(value) {\n"
+                "    value + value\n"
+                "}\n"
+                "\n"
+                "func main() {\n"
+                "    print(doubled(3))\n"
+                "}\n",
+            )
+            _, types, _ = self._analyze_file(entry)
+            self.assertIs(types["doubled"].result, KType.INT)
+
+    def test_circular_import_reports_the_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root, "a.kn", 'import "b.kn"\n\nfunc a_value() {\n    1\n}\n'
+            )
+            self._write(
+                root, "b.kn", 'import "a.kn"\n\nfunc b_value() {\n    2\n}\n'
+            )
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "a.kn"\n'
+                "\n"
+                "func main() {\n"
+                "    print(a_value())\n"
+                "}\n",
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            message = str(raised.exception)
+            self.assertIn("circular import", message)
+            self.assertIn("'a.kn'", message)
+            self.assertIn("'b.kn'", message)
+            self.assertEqual(raised.exception.line, 1)
+
+    def test_module_cannot_import_itself(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = self._write(
+                root, "program.kn", 'import "program.kn"\n\nfunc main() {\n}\n'
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            self.assertIn("circular import", str(raised.exception))
+
+    def test_imported_module_must_not_declare_main(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "bad.kn", "func main() {\n}\n")
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "bad.kn"\n'
+                "\n"
+                "func main() {\n"
+                "}\n",
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            message = str(raised.exception)
+            self.assertIn("must not declare 'main'", message)
+            self.assertIn("bad.kn", message)
+            self.assertEqual(raised.exception.line, 1)
+
+    def test_missing_module_is_a_located_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = self._write(
+                root,
+                "program.kn",
+                "// A comment keeps the import on a known line.\n"
+                "\n"
+                'import "missing.kn"\n'
+                "\n"
+                "func main() {\n"
+                "}\n",
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            self.assertIn("missing.kn", str(raised.exception))
+            self.assertEqual(
+                (raised.exception.line, raised.exception.column), (3, 1)
+            )
+
+    @staticmethod
+    def _import_program(path: str) -> str:
+        escaped = path.replace("\\", "\\\\")
+        return f'import "{escaped}"\nfunc main() {{\n}}\n'
+
+    def test_import_path_rules_are_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = (
+                ("", "cannot be empty"),
+                ("/outside.kn", "must be relative"),
+                ("lib.kinetic", "'.kn' extension"),
+            )
+            for path, expected in cases:
+                with self.subTest(path=path):
+                    entry = self._write(
+                        root, "program.kn", self._import_program(path)
+                    )
+                    with self.assertRaises(CompileError) as raised:
+                        self._analyze_file(entry)
+                    self.assertIn(expected, str(raised.exception))
+                    self.assertEqual(raised.exception.line, 1)
+
+    def test_import_paths_follow_one_rule_on_every_host(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = (
+                ("\\outside.kn", "must be relative"),
+                ("//outside.kn", "must be relative"),
+                ("C:/outside.kn", "must be relative"),
+                ("C:outside.kn", "must be relative"),
+                ("\\\\server\\share\\lib.kn", "must be relative"),
+                ("lib\\outside.kn", "forward slashes"),
+                ("modules\\text_utils.kn", "forward slashes"),
+            )
+            for path, expected in cases:
+                with self.subTest(path=path):
+                    entry = self._write(
+                        root, "program.kn", self._import_program(path)
+                    )
+                    with self.assertRaises(CompileError) as raised:
+                        self._analyze_file(entry)
+                    self.assertIn(expected, str(raised.exception))
+                    self.assertEqual(
+                        (raised.exception.line, raised.exception.column),
+                        (1, 1),
+                    )
+
+    def test_module_syntax_errors_name_the_imported_module(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib/old.kn", "fn helper() {\n    1\n}\n")
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib/old.kn"\n'
+                "\n"
+                "func main() {\n"
+                "}\n",
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            message = str(raised.exception)
+            self.assertIn("lib/old.kn", message)
+            self.assertIn("func", message)
+            self.assertEqual(raised.exception.line, 1)
+
+    def test_module_declarations_share_the_top_level_namespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(root, "lib.kn", "func helper() {\n    1\n}\n")
+            entry = self._write(
+                root,
+                "program.kn",
+                'import "lib.kn"\n'
+                "\n"
+                "func helper() {\n"
+                "    2\n"
+                "}\n"
+                "\n"
+                "func main() {\n"
+                "    print(helper())\n"
+                "}\n",
+            )
+            with self.assertRaises(CompileError) as raised:
+                self._analyze_file(entry)
+            self.assertIn("duplicate function", str(raised.exception))
+
+    def test_analyzer_rejects_imports_that_were_never_resolved(self):
+        with self.assertRaises(CompileError) as raised:
+            analyze('import "lib.kn"\nfunc main() {\n}\n')
+        self.assertIn("resolved before analysis", str(raised.exception))
+
+    def test_import_without_a_source_path_is_rejected(self):
+        from compiler.modules import resolve_imports
+
+        program = parse('import "lib.kn"\n\nfunc main() {\n}\n')
+        with self.assertRaises(CompileError) as raised:
+            resolve_imports(program, None)
+        self.assertIn("source file path", str(raised.exception))
+        self.assertEqual(raised.exception.line, 1)
+
+
 class RunExitStatusTests(unittest.TestCase):
     def test_run_preserves_failure_status(self):
         from contextlib import redirect_stdout
@@ -1019,6 +1450,7 @@ class DiagnosticExampleTests(unittest.TestCase):
         "main_parameters.kn": "cannot have parameters",
         "duplicate_parameters.kn": "duplicate parameter",
         "record_field_immutable.kn": "cannot modify immutable variable",
+        "import_after_declaration.kn": "import declarations must appear before",
     }
 
     def test_error_examples_fail_with_expected_diagnostic(self):
@@ -1050,7 +1482,7 @@ class DiagnosticExampleTests(unittest.TestCase):
         )
 
     def test_valid_examples_pass_frontend(self):
-        from pathlib import Path
+        from compiler.modules import load_program
 
         for name in (
             "01_hello.kn", "02_logic.kn", "03_arrays.kn",
@@ -1058,11 +1490,11 @@ class DiagnosticExampleTests(unittest.TestCase):
             "06_status_handling.kn", "07_byte_processing.kn",
             "08_array_lengths.kn", "09_array_lifetimes.kn",
             "10_text.kn", "11_indexed_writes.kn", "12_host_io.kn",
-            "13_records.kn",
+            "13_records.kn", "14_modules.kn",
         ):
             with self.subTest(example=name):
-                text = Path("examples", name).read_text(encoding="utf-8")
-                types, _ = analyze(text)
+                program = load_program(Path("examples", name))
+                types = TypeAnalyzer(program, Diagnostics()).analyze()
                 self.assertIn("main", types)
 
 

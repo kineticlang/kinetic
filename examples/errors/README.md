@@ -1,6 +1,6 @@
 # Error examples
 
-These Kinetic 1.5.1 examples **fail to compile on purpose**. Each demonstrates a specific
+These Kinetic 1.6.0 examples **fail to compile on purpose**. Each demonstrates a specific
 compile-time error so you can see what the diagnostic looks like.
 
 Build any of them with:
@@ -29,6 +29,7 @@ kinetic: error: <line>:<column>: <message>
 | [len_type.kn](len_type.kn) | Passing an integer instead of an integer array or string to the length builtin. |
 | [len_arity.kn](len_arity.kn) | Calling the length builtin without its required argument. |
 | [record_field_immutable.kn](record_field_immutable.kn) | Writing a record field through an immutable `let` binding. |
+| [import_after_declaration.kn](import_after_declaration.kn) | An `import` that appears after a function declaration instead of before it. |
 
 See [warnings](../warnings/README.md) for diagnostics that do **not** stop
 compilation.

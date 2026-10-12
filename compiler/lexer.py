@@ -38,6 +38,7 @@ class Lexer:
         "if": TokenKind.IF,
         "else": TokenKind.ELSE,
         "record": TokenKind.RECORD,
+        "import": TokenKind.IMPORT,
     }
     _removed_keywords = {
         "fn": "the 'fn' keyword was removed in 1.0.0; declare functions with 'func'",

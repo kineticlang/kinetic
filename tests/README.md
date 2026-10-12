@@ -1,7 +1,7 @@
 # Tests
 
-Kinetic 1.5.1 has separate suites for repository structure, frontend behavior,
-LLVM generation, and native execution. The native suite runs in hosted CI on
+Kinetic 1.6.0 has separate suites for repository structure, frontend behavior,
+module resolution, LLVM generation, and native execution. The native suite runs in hosted CI on
 every push and stays opt-in locally. Run commands below from the repository root.
 
 ## Static-only checks
@@ -35,10 +35,14 @@ declarations, precedence, entry-point checks, parameter errors, mutability,
 scope-aware warnings, array-length tracking, and deferred function inference.
 Host-I/O builtin tests cover signatures, arity and type errors, reserved names,
 and void-binding rules. Record tests cover declaration validation, construction
-typing, field reads and writes, mutability rules, and name clashes. It also
-analyzes all thirteen numbered examples and
-checks intentional failures
-and warning examples. This executes compiler frontend code, but does not emit
+typing, field reads and writes, mutability rules, and name clashes. Module tests
+cover relative and transitive resolution, dependency-first merge order, records
+from modules, repeated and diamond imports loading once, cycles, missing files,
+invalid paths (empty, rooted, drive-qualified, and backslash-separated forms are
+rejected with the same rule on every host), modules that declare `main`,
+cross-file name clashes, and unresolved imports reaching the analyzer. It also
+loads and analyzes all fourteen numbered examples and checks intentional
+failures and warning examples. This executes compiler frontend code, but does not emit
 IR or run generated programs.
 
 Length-builtin tests cover valid/empty arrays, invalid types and arity, reserved
@@ -60,6 +64,9 @@ It generates verified IR for every top-level example, checks Hello World output
 content in IR, tests inferred function results, and inspects collected warnings.
 It does not recursively include intentionally invalid diagnostic examples.
 Discovery requires a nonempty example set rather than a hard-coded file count.
+An import test compiles a program from disk and requires the merged IR to match
+the equivalent single-file program, which also pins the deterministic ordering of
+imported declarations.
 This is compilation to IR, even though it does not build or run native binaries.
 
 Array tests inspect metadata construction/extraction, aggregate stores/loads,
@@ -94,9 +101,10 @@ The [native suite](test_native.py) requires Clang and llvmlite. It runs in
 hosted CI on every push; locally it is skipped unless native tests are enabled
 and Clang is available, and opting in without llvmlite is not supported. Each
 test builds in a temporary directory and checks an expected output fragment.
-Coverage includes all thirteen numbered examples, including the status-handling,
-byte-processing, returned-array lifetime, indexed-write, and record
-demonstrations.
+Coverage includes all fourteen numbered examples, including the status-handling,
+byte-processing, returned-array lifetime, indexed-write, record, and imported-module
+demonstrations; the module test compiles a module and its program from temporary
+files and executes the result.
 Host-I/O tests forward program arguments, round-trip a file through
 `write_file`/`read_file`, check `eprint` output on standard error, assert
 `exit` status codes, and expect traps for missing files and out-of-range
